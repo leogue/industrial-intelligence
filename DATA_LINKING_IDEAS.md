@@ -88,7 +88,7 @@ flowchart LR
     E[Entreprise (siren)] -->|établissement| E1[Etablissement (siret)]
     E -->|événement juridique| E2[Evenement_Juridique]
     E -->|bilan financier| E3[Bilan_Financier]
-    E -->|NAF 2025| E4[NAF_2025Projection]
+    E -->|NAF 2025| E4[NAF_2025Projection]
 ```
 
 ### c) Flux complet incluant la projection NAF 2025
@@ -129,11 +129,6 @@ WHERE e.siren = '123456789';
 3. **Exécuter** les requêtes Mermaid‑inspirées ou traduites en SQL pour produire des rapports, des graphes interactifs ou des tableaux de bord (Power BI, Tableau, Looker, etc.).  
 4. **Personnaliser** les diagrammes Mermaid selon vos besoins (ajouter des nœuds « propriétaire », « siège », etc.) ; ils peuvent être rendus directement dans GitHub, MkDocs, ou tout outil de visualisation Mermaid.
 
----
-
-**Fichier créé** : `DATA_LINKING_IDEAS.md` sur la branche `feat/data-linking-ideas`.  
-Vous pouvez maintenant commencer à ajouter les connecteurs, les tables et à enrichir les diagrammes Mermaid selon l'évolution de vos pipelines de données.
-
 ## 5. Idées de visualisation pour l'utilisateur
 
 Voici un ensemble d'idées de tableaux de bord /グラフィック que l'utilisateur final pourrait être amené à solliciter, avec pour chaque idée le but, les données clés à afficher et un exemple de code Mermaid (là où cela aide à conceptualiser le tracé).
@@ -154,7 +149,7 @@ Voici un ensemble d'idées de tableaux de bord /グラフィック que l'utilisa
 ### b) Heatmap des événements juridiques par trimestre et région
 - **But** Visualiser l’intensité des événements (création, radiation, procédure) dans le temps et sur le territoire.
 - **Données clés** `date_event` (trimestre), `codeCommuneEtablissement`, `type_event`, nombre d occurrences.
-- **Exemple Mermaid** (Mermaid ne gère pas nativement les heatmaps, mais on peut utiliser la syntaxe `pie` ou `graph` pour une représentation simplifiée) :
+- **Exemple Mermaid** (Mermaid ne gère pas nativement les heatmaps, mais on peut utiliser la syntaxe `pie` ou `graph` pour una représentation simplifiée) :
   ```mermaid
   pie title Événements par trimestre
     "Q1" : 25
