@@ -133,3 +133,81 @@ WHERE e.siren = '123456789';
 
 **Fichier créé** : `DATA_LINKING_IDEAS.md` sur la branche `feat/data-linking-ideas`.  
 Vous pouvez maintenant commencer à ajouter les connecteurs, les tables et à enrichir les diagrammes Mermaid selon l'évolution de vos pipelines de données.
+
+## 5. Idées de visualisation pour l'utilisateur
+
+Voici un ensemble d'idées de tableaux de bord /グラフィック que l'utilisateur final pourrait être amené à solliciter, avec pour chaque idée le but, les données clés à afficher et un exemple de code Mermaid (là où cela aide à conceptualiser le tracé).
+
+### a) Sankey des flux de données entre sources
+- **But** Montrer comment les données circulent du source brute (SIRENE) vers les enrichissements (INPI, bilans, NAF 2025).
+- **Données clés** `source` → `cible` avec un poids proportionnel au nombre d'enregistrements.
+- **Exemple Mermaid** :
+  ```mermaid
+  flowchart TB
+    SIRENE -->|siren| INPI
+    SIRENE -->|siren| BODACC
+    SIRENE -->|siren| BILANS
+    SIRENE -->|siren| NAF2025
+```
+- **Affichage attendu** Un diagramme Sankey où l’épaisseur des flèches reflète le volume d’enregistrements liés.
+
+### b) Heatmap des événements juridiques par trimestre et région
+- **But** Visualiser l’intensité des événements (création, radiation, procédure) dans le temps et sur le territoire.
+- **Données clés** `date_event` (trimestre), `codeCommuneEtablissement`, `type_event`, nombre d occurrences.
+- **Exemple Mermaid** (Mermaid ne gère pas nativement les heatmaps, mais on peut utiliser la syntaxe `pie` ou `graph` pour une représentation simplifiée) :
+  ```mermaid
+  pie title Événements par trimestre
+    "Q1" : 25
+    "Q2" : 30
+    "Q3" : 20
+    "Q4" : 28
+  ```
+
+### c) Network graph d’affaires (links entre entreprises via siret / pouvoirs)
+- **But** Montrer les relations de propriété, de filiale, de représentant légal.
+- **Données clés** `siren`, `siret`, `typeDePersonne`, `actif`, `dateEvenement_pouvoir`.
+- **Exemple Mermaid** :
+  ```mermaid
+  graph TD
+    A[Entreprise A] -->|filiale| B[Entreprise B]
+    A -->|représentant| C[Personne C]
+    B -->|siège| A
+  ```
+
+### d) Tableau de bord KPI “Santé financière”
+- **But** Donner un aperçu rapide des indicateurs financiers principaux (CA moyen, résultat net, endettement).
+- **Données clés** `chiffre_affaires`, `resultat`, `total_actif`, `total_passif` agrégés par `siren`.
+- **Suggestion d’outil** Un simple tableau Excel / Power BI avec barres et indicateurs de tendance.
+
+### e) Carte géographique des établissements avec indicateurs superposés
+- **But** Voir où se concentrent les activités, les événements ou les difficultés financières sur le territoire.
+- **Données clés** `codeCommuneEtablissement`, `libelleCommuneEtablissement`, `chiffre_affaires`, `type_event`.
+- **Suggestion d’outil** Mapbox / QGIS / Power BI Maps ; en Mermaid on peut esquemaser le flux :
+  ```mermaid
+  graph TD
+    A[Paris] -->|20 établissements| B["Chiffre d'affaires > 1M€"]
+    A-->|5 événements| C["Contentieux"]
+  ```
+
+### f) Évolution NAF 2025 au fil du temps
+- **But** Suivre la migration des activités vers les nouveaux codes NAF 2025.
+- **Données clés** `code_naf_2025`, `date_effet`, `siren`.
+- **Exemple Mermaid** (timeline simplifiée) :
+  ```mermaid
+  timeline
+    "2024 Q1" : Migration débutée
+    "2024 Q3" : 30 % des entreprises mises à jour
+    "2025 Q1" : Profil NAF 2025 pleinement effectif
+  ```
+
+---
+
+**Comment exploiter ces idées**
+
+- Commencer par le Sankey (a) pour valider la provenance des données.
+- Utiliser la network graph (b) pour détecter les structures de propriété cachées.
+- Compléter par le tableau de bord KPI (c) pour un suivi managérial.
+- Ajouter la carte géographique (d) pour une dimension spatiale.
+- Terminer par l’évolution NAF 2025 (e) pour analyser les changements sectoriels.
+
+---
