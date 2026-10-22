@@ -114,7 +114,7 @@ Les accès exacts sont à confirmer depuis la configuration sécurisée de chaqu
 
 | Source | Accès / point d'entrée | Données | Stratégie |
 |---|---|---|---|
-| **INSEE SIRENE, via data.gouv.fr** | https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret | Unités légales (SIREN), établissements (SIRET), historiques, géographie administrative | **Parquet-First** obligatoire (format CSV prévu pour disparaître H2 2027) ; évolution NAF 2025 (bascule réglementaire en janvier 2027) → gérer variables transitoires `activitePrincipaleNAF25Etablissement` et `activitePrincipaleNAF25UniteLegale` diffusées par l Insee. |
+| **INSEE SIRENE, via data.gouv.fr** | https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret | Unités légales (SIREN), établissements (SIRET), historiques, géographie administrative | Stock/Parquet **mensuel**, chargement de snapshot |
 | **INPI RNE API** | `https://registre-national-entreprises.inpi.fr/api/` | Fiches juridiques, formalités, documents, bilans saisis, actes | Requêtes ciblées + deltas **quotidiens** |
 | **INPI SFTP documentaire** | `registre-national-entreprises.inpi.fr:9222` (SFTP) | `Actes_PDF/`, `Bilans_PDF/` | Récupération documentaire incrémentale ou ciblée |
 | **INPI ancien FTP stock** | `www.inpi.net` (accès technique distinct) | ZIP de stock RNE formalités et comptes | Bootstrap éventuel, à revalider côté authentification |
