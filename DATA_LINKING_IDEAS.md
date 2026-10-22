@@ -41,10 +41,11 @@ erDiagram
         string code_naf_2025
     }
 
-    Company ||--|{ Establishment : "possède des établissements"
-    Company ||--|{ LegalEvent   : "a subi des événements juridiques"
-    Company ||--|{ FinancialStatement : "a des bilans financiers"
-    Company ||--|{ Naf2025Projection : "code activité NAF 2025"
+    Company ||--o{ Establishment : "possède des établissements"
+    Company ||--o{ LegalEvent   : "a subi des événements juridiques"
+    Company ||--o{ FinancialStatement : "a des bilans financiers"
+    Company ||--o{ Naf2025Projection : "code activité NAF 2025"
+```
 ```
 
 **Cardinalités :**  
