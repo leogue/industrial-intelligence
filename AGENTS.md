@@ -97,6 +97,7 @@ tofu plan -var-file=envs/dev.tfvars -out=dev.tfplan
 ## 4. Collaboration à trois
 
 - **Conventional Commits obligatoires** : utiliser le format `type(scope): description`, avec un scope facultatif. Types usuels : `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `style`. Exemple : `feat(infra): add European GCS bucket`. Signaler les changements incompatibles avec `!` ou un pied de message `BREAKING CHANGE:`.
+- **Gestion des branches et commits** : La branche principale est `main`; il est formellement interdit de committer ou de pousser directement sur `main`. Les branches doivent suivre le format `<type>/<description-courte>` (ex: `feat/insee-parquet-parser`). Les Pull Requests ciblent obligatoirement `main`. Les descriptions de commit sont en français, minuscules, sans point final, à l’inf initif (ex: `feat(infra): ajouter le bucket gcs de dev`). Le fichier `AGENTS.md` est désormais en lecture seule pour l’agent après cette commande.
 - Avant tout commit, indexer uniquement les fichiers pertinents avec `git add <chemins>`, puis vérifier `git diff --cached` et `git diff --cached --check`. Ne pas indexer de secrets, d’états OpenTofu ni d’artefacts générés. Ne pas créer de commit ou pousser sans demande explicite.
 - Conserver les dossiers du projet encore vides avec un fichier `.gitkeep` ; retirer ce fichier lorsque le dossier contient des fichiers suivis utiles.
 - Une **branche Git par fonctionnalité/connecteur** ; revue par au moins un autre membre avant fusion vers la branche principale.
