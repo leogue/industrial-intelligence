@@ -1,6 +1,6 @@
 # Industrial Intelligence
 
-Développement directement sur les services GCP du projet **`industrial-intelligence-dev`** : pas de Docker, de base de données locale ni d’émulateurs cloud.
+Développement directement sur les services GCP du projet **`industrial-intelligence-dev`** : aucune base de données locale ni émulateur cloud obligatoire. Les conteneurs servent d’artefacts de déploiement Cloud Run, pas d’infrastructure locale.
 
 ## Outils
 
@@ -52,3 +52,22 @@ gcloud services enable storage.googleapis.com --project=industrial-intelligence-
 ```
 
 `tofu apply` crée une ressource facturable. Aucun déploiement n’est effectué automatiquement. L’état OpenTofu reste local pour cette première configuration : conserver `terraform.tfstate` hors de Git et le sauvegarder ; le bucket de données n’est pas un backend d’état.
+
+## Ingestion INPI RNE
+
+- [Exploration des accès et données INPI](docs/inpi.md).
+- [Fonctionnement, commandes, image et déploiement de l’ingestion](docs/inpi-ingestion.md).
+
+Deux commandes dans une même image (`Dockerfile.rne`) : `bootstrap` copie le ZIP de formalités FTP vers GCS en flux ; `refresh` stocke les pages différentielles des entreprises avec manifestes et checkpoints. Le ZIP n’est pas encore transformé en tables ou fiches unitaires. Aucun PDF/bilan/OCR dans cette première version.
+
+```sh
+uv sync --locked
+uv run rne-ingest --help
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
+
+Les tests sont sans réseau. `.env.example` décrit les variables ; charger un `.env` privé explicitement avec `uv run --env-file .env ...`. Ne jamais intégrer les secrets à l’image ou aux variables OpenTofu.
+
+Les fichiers `infra/opentofu/rne*.tf` définissent Artifact Registry, les secrets vides, deux Cloud Run Jobs et un Scheduler quotidien en pause par défaut. Tous les flags RNE sont désactivés par défaut : ces définitions **ne prouvent pas un déploiement**. La publication de l’image, les valeurs Secret Manager, le téléchargement national et toute application de plan nécessitent une validation distincte. Ne pas activer le quotidien avant d’avoir confirmé la couverture du stock et terminé le bootstrap/rattrapage.

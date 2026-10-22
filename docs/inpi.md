@@ -3,6 +3,8 @@
 > Exploration en lecture seule du **22 octobre 2026**, depuis le poste de développement.
 > Objectif : comprendre les accès, formats et mécanismes de synchronisation, **pas implémenter ni lancer une ingestion**.
 > **Observé** = réponse obtenue avec le compte fourni ; **documenté** = documentation INPI ; **proposé** = choix futur du projet.
+>
+> Cette note conserve les constats de l'exploration. Un premier connecteur brut pour le stock de formalités et le différentiel entreprises est maintenant décrit dans [le guide d'ingestion](inpi-ingestion.md), avec ses limites et la procédure de déploiement. Cela ne signifie pas qu'il a été exécuté à l'échelle nationale ou déployé.
 
 ## 1. Synthèse : à quoi avons-nous réellement accès ?
 

@@ -1,0 +1,10 @@
+# Allowlist: credentials, Terraform state/plans, IDE files and tests never enter the context.
+*
+!Dockerfile.rne
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!src/**
+src/**/__pycache__/
+src/**/*.pyc
