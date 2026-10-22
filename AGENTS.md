@@ -266,3 +266,29 @@ Les modèles Pydantic sont adaptés aux **configurations, métadonnées et messa
 8. Automatiser les rafraîchissements, puis construire l'API et la visualisation du graphe.
 
 **En cas de contradiction entre une suggestion d'architecture et le code/README courant, ne pas modifier silencieusement l'architecture : expliquer le choix et conserver un changement cohérent, minimal et testable.**
+
+## Directives Git & Méthodologie de Travail avec l'IA
+
+1. **Directive principale** : Commiter souvent en LOCAL, Push plus TARD.  
+   - **Commit local** : OUI (faire des petits commits atomiques dès qu’une fonctionnalité ou un test passe).  
+   - **Push distant** : SEULEMENT quand une tâche complete est terminée et validée par un humain.
+
+2. **Workflow Standard : « Feature Branch + Agent »**  
+   - Crée une branche `feature/<nom>` pour chaque nouvelle fonctionnalité.  
+   - Développe, teste, et valide localement.  
+   - Lorsque la branche est prête, ouvre une Pull Request ciblant **main**.  
+   - Fais‑la relire par un autre membre, puis merge‑la après approbation.
+
+3. **Bonnes pratiques de commit**  
+   - Format **Conventional Commits** : `type(scope): description` (ex. `feat(infra): ajouter le bucket gcs de dev`).  
+   - Messages en minuscules, sans point final.  
+   - Ne pas committer de secrets, de secrets JSON ou de fichiers d’état OpenTofu.  
+
+4. **Gestion des branches**  
+   - Chaque branche doit suivre le format `<type>/<description-courte>` (ex. `feat/insee-parsing`).  
+   - Les Pull Requests ciblent obligatoirement **main**.  
+
+5. **Précautions**  
+   - Ne jamais pousser directement sur `main`.  
+   - Toujours vérifier `git diff --cached` avant de pousser.  
+   - Conserver `terraform.tfstate` hors du repo ; sauvegarder ailleurs si besoin.
