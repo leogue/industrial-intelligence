@@ -155,9 +155,11 @@ flowchart LR
 
 ### Règles d'implémentation par couche :
 
+> ℹ️ **Détail d'accès et ingestion** : Pour l'interrogation de l'API data.gouv.fr (`https://www.data.gouv.fr/api/1/datasets/5b7ffc618b4c4169d30727e0/`), l'extraction des empreintes SHA-1 et le script complet de téléchargement en streaming idempotent vers GCS, se référer au guide dédié [`sirene.md`](./sirene.md).
+
 1. **Couche Bronze (GCS Raw Storage)** :
    - Fichiers d'origine immuables stockés sous `gs://industrial-intelligence-dev-data/raw/sirene/snapshot_date=YYYY-MM-DD/`.
-   - Conservation des métadonnées de chargement : `source_url`, `checksum_sha256`, `retrieved_at_utc`.
+   - Conservation des métadonnées de chargement : `source_url`, `checksum_sha1`, `retrieved_at_utc`.
 2. **Couche Silver (Normalisation & Qualité)** :
    - Traitement des valeurs nulles textuelles (ex: remplacer les valeurs de substitution `[ND]` de l'INSEE par `NULL`).
    - Normalisation typographique (majuscules, espaces insécables).
