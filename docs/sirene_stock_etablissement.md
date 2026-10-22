@@ -10,13 +10,20 @@ Ce document détaille la structure, la volumétrie, les métadonnées et l'analy
 |---|---|
 | **Fichier source** | `stock-stocketablissement-parquet.parquet` |
 | **Origine** | INSEE via [data.gouv.fr — Base SIRENE](https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret) |
+| **API Dataset** | `https://www.data.gouv.fr/api/1/datasets/5b7ffc618b4c4169d30727e0/` |
+| **Identifiant Ressource (`resource.id`)** | `a29c1297-1f92-4e2a-8f6b-8c902ce96c5f` |
+| **URL CDN directe** | `https://static.data.gouv.fr/resources/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/20261001-073823/stock-stocketablissement-parquet.parquet` |
+| **Empreinte SHA-1 (`resource.checksum.value`)** | `03593e64ea6f810ee6243c40b675a9c1973e1f36` |
+| **Dernière modification distante** | `2026-10-01T07:39:55.781000+00:00` |
 | **Générateur Parquet** | DuckDB (`duckdb_schema`) |
-| **Taille disque (compressé)** | **2,11 Go** (2 210 114 710 octets) |
+| **Taille disque (compressé)** | **2,11 Go** (2 210 114 710 octets) / API: 2 220 887 978 octets |
 | **Nombre total de lignes** | **44 064 115** |
 | **Nombre de colonnes** | **52** |
 | **Clé primaire canonique** | `siret` (VARCHAR, 14 caractères = `siren` [9] + `nic` [5]) |
 | **Clé étrangère (parent)** | `siren` (VARCHAR, 9 caractères -> `StockUniteLegale`) |
 | **Unicité de la clé primaire** | **100% garantie** (0 doublon détecté sur 44,06M lignes) |
+
+> ℹ️ Voir le guide d'accès complet et le code d'ingestion idempotente dans [`sirene.md`](./sirene.md).
 
 ---
 

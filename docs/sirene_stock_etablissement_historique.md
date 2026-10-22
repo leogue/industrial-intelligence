@@ -10,13 +10,20 @@ Ce document détaille la structure, la volumétrie, les métadonnées et la mod�
 |---|---|
 | **Fichier source** | `stock-stocketablissementhistorique-parquet.parquet` |
 | **Origine** | INSEE via [data.gouv.fr — Base SIRENE](https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret) |
+| **API Dataset** | `https://www.data.gouv.fr/api/1/datasets/5b7ffc618b4c4169d30727e0/` |
+| **Identifiant Ressource (`resource.id`)** | `2b3a0c79-f97b-46b8-ac02-8be6c1f01a8c` |
+| **URL CDN directe** | `https://static.data.gouv.fr/resources/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/20261001-074108/stock-stocketablissementhistorique-parquet.parquet` |
+| **Empreinte SHA-1 (`resource.checksum.value`)** | `7b409a263d54eeebed252a706ab1c6bcd133b15b` |
+| **Dernière modification distante** | `2026-10-01T07:41:52.467000+00:00` |
 | **Générateur Parquet** | DuckDB (`duckdb_schema`) |
-| **Taille disque (compressé)** | **833,03 Mo** (873 497 400 octets) |
+| **Taille disque (compressé)** | **833,03 Mo** (873 497 400 octets) / API: 877 620 853 octets |
 | **Nombre total de lignes** | **96 228 441** |
 | **Nombre de colonnes** | **18** |
 | **Type de modélisation** | **Slowly Changing Dimension Type 2 (SCD2)** |
 | **Clé primaire composite** | (`siret`, `dateDebut`) |
 | **Clés étrangères** | `siret` (14 car. -> `StockEtablissement`), `siren` (9 car. -> `StockUniteLegale`) |
+
+> ℹ️ Voir le guide d'accès complet et le code d'ingestion idempotente dans [`sirene.md`](./sirene.md).
 
 ---
 
