@@ -33,8 +33,8 @@ erDiagram
     }
     ENTITY FinancialStatement {
         string siren FK
-        numeric chiffre_affaires   # champ m1 du bilan saisi
-        numeric resultat           # champ m3 du bilan saisi
+        numeric chiffre_affaires
+        numeric resultat
     }
     ENTITY Naf2025Projection {
         string siren FK
@@ -46,10 +46,10 @@ erDiagram
     Company ||--o{ FinancialStatement : "a des bilans financiers"
     Company ||--o{ Naf2025Projection : "code activité NAF 2025"
 ```
-```
 
-**Cardinalités :**  
-- 1 Company peut avoir **N** Établissement (un siège social + 零 ou plusieurs établissements).  
+**Cardinalités**  
+
+- 1 Company peut avoir **N** Établissement (siège social + zéro ou plusieurs établissements).  
 - 1 Company peut avoir **N** LegalEvent (événements successifs dans le temps).  
 - 1 Company peut avoir **N** FinancialStatement (bilans annuels).  
 - 1 Company peut avoir **N** Naf2025Projection (mise à jour de la.code NAF au fil des nomenclatures).
@@ -75,11 +75,10 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    A[SIRENE] -->|siren| A1[INPI RNE API]
+    A[SIRENE] -->|siren| A1[INPI RNE API]
     A -->|siren| A2[BODACC/BOAMP]
     A -->|siren| A3[Bilans financiers JSON]
-    A -->|siren| A4[NAF 2025 projection]
-    style A fill:#f9f,stroke:#333,stroke-width:2px
+    A -->|siren| A4[NAF 2025 projection]
 ```
 
 ### b) Flux par entreprise
@@ -89,7 +88,7 @@ flowchart LR
     E[Entreprise (siren)] -->|établissement| E1[Etablissement (siret)]
     E -->|événement juridique| E2[Evenement_Juridique]
     E -->|bilan financier| E3[Bilan_Financier]
-    E -->|NAF 2025| E4[NAF_2025Projection]
+    E -->|NAF 2025| E4[NAF_2025Projection]
 ```
 
 ### c) Flux complet incluant la projection NAF 2025
@@ -97,20 +96,15 @@ flowchart LR
 ```mermaid
 flowchart TD
     Raw[Données brutes (SIRENE CSV, INPI JSON, BODACC)] -->|Extraction| F[Table de liaison (siren)]
-    F -->|Jointures| E1[Établissement table]      /* siren → siret */
+    F -->|Jointures| E1[Établissement table]       # siren → siret
     F -->|Jointures| E2[Evenement_Juridique table]
     F -->|Jointures| E3[Bilan_Financier table]
-    F -->|Jointures| E4[Naf2025Projection table]   /* NAF 2025 */
-    style Raw fill:#bbf,stroke:#333,stroke-width:2px
-    style F fill:#cfc,stroke:#333,stroke-width:2px
+    F -->|Jointures| E4[Naf2025Projection table]   # NAF 2025
 ```
 
----
-
-## 4. Exemple de requête SQL (jointure d'entreprise avec établissement et événements)
+### d) Requête SQL exemplaire (jointure entreprise ↔ établissement ↔ événements)
 
 ```sql
--- Liste complète pour une entreprise donnée
 SELECT e.siren,
        et.siret,
        et.codeCommuneEtablissement,
@@ -118,19 +112,17 @@ SELECT e.siren,
        ev.type_event,
        ev.date_event,
        bf.chiffre_affaires,
-       bf.resultat,
-       n.code_naf_2025
+       bf.resultat
 FROM Entreprise e
 JOIN Etablissement et ON et.siren = e.siren
 LEFT JOIN Evenement_Juridique ev ON ev.siren = e.siren
 LEFT JOIN Bilan_Financier bf ON bf.siren = e.siren
-LEFT JOIN Naf2025Projection n ON n.siren = e.siren
 WHERE e.siren = '123456789';
 ```
 
 ---
 
-## 5. Comment utiliser ces idées
+## 4. Comment utiliser ces idées
 
 1. **Charger** les données brutes (SIRENE CSV, INPI RNE JSON, BODACC extraits, bilans saisis) dans votre entrepôt de données (GCS → Parquet / BigQuery).  
 2. **Créer** les tables `Company`, `Establishment`, `LegalEvent`, `FinancialStatement`, `Naf2025Projection` en respectant les clés étrangères (`siren`, `siret`).  
