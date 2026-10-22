@@ -11,46 +11,51 @@
 
 ---
 
-## Lien logique entre les sources (Mermaid ER‑diagramme)
+## 1. Lien logique entre les sources (Mermaid ER‑diagramme)
 
 ```mermaid
 erDiagram
-    ENTITY Entreprise {
+    ENTITY Company {
         string siren PK
         string denomination
         string activitePrincipale
     }
-    ENTITY Etablissement {
+    ENTITY Establishment {
         string siret PK
         string siren FK
         string codeCommuneEtablissement
         string codePostalEtablissement
     }
-    ENTITY Evenement_Juridique {
+    ENTITY LegalEvent {
         string siren FK
         date date_event
         string type_event
     }
-    ENTITY Bilan_Financier {
+    ENTITY FinancialStatement {
         string siren FK
-        string exercice
         numeric chiffre_affaires   # champ m1 du bilan saisi
         numeric resultat           # champ m3 du bilan saisi
     }
-    ENTITY NAF_2025Projection {
+    ENTITY Naf2025Projection {
         string siren FK
         string code_naf_2025
     }
 
-    Entreprise ||--|{ Etablissement : "possède"
-    Entreprise ||--|{ Evenement_Juridique : " subit"
-    Entreprise ||--|{ Bilan_Financier : " renseigne"
-    Entreprise ||--|{ NAF_2025Projection : " code activité NAF 2025"
+    Company ||--|{ Establishment : "possède des établissements"
+    Company ||--|{ LegalEvent   : "a subi des événements juridiques"
+    Company ||--|{ FinancialStatement : "a des bilans financiers"
+    Company ||--|{ Naf2025Projection : "code activité NAF 2025"
 ```
+
+**Cardinalités :**  
+- 1 Company peut avoir **N** Établissement (un siège social + 零 ou plusieurs établissements).  
+- 1 Company peut avoir **N** LegalEvent (événements successifs dans le temps).  
+- 1 Company peut avoir **N** FinancialStatement (bilans annuels).  
+- 1 Company peut avoir **N** Naf2025Projection (mise à jour de la.code NAF au fil des nomenclatures).
 
 ---
 
-## Concepts de liaison (texte)
+## 2. Concepts de liaison (texte)
 
 | Liaison | Source → Cible | Clé de jointure |
 |---------|----------------|-----------------|
@@ -58,14 +63,14 @@ erDiagram
 | **SIREN** | SIRENE ⇢ BODACC/BOAMP | `siren` (extraction partielle) |
 | **SIREN** | SIRENE ⇢ Bilans financiers JSON | `siren` présent dans métadonnées |
 | **SIREN** | SIRENE ⇢ NAF 2025 projection | `siren` ↔ `activitePrincipaleNAF25*` |
-| **Siret** | SIRENE ⇢ Établissement | `siret` = `SIREN` + `NIC` (14 c.) |
+| **Siret** | SIRENE ⇢ Établissement | `siret` = `siren` + `NIC` (14 c.) |
 | **Géographie** | Établissement ⇢ BAN / COG | `codeCommuneEtablissement`, `codePostalEtablissement`, coordonnées Lambert 93 |
 
 ---
 
-## Visualisations suggérées (Mermaid)
+## 3. Visualisations suggérées (Mermaid)
 
-### 1. Diagramme de flux des données
+### a) Diagramme de flux des données
 
 ```mermaid
 flowchart TD
@@ -76,7 +81,7 @@ flowchart TD
     style A fill:#f9f,stroke:#333,stroke-width:2px
 ```
 
-### 2. Flux par entreprise
+### b) Flux par entreprise
 
 ```mermaid
 flowchart LR
@@ -86,32 +91,52 @@ flowchart LR
     E -->|NAF 2025| E4[NAF_2025Projection]
 ```
 
-### 4. Carte de connectivité (exemple de requête pseudo‑SQL)
+### c) Flux complet incluant la projection NAF 2025
+
+```mermaid
+flowchart TD
+    Raw[Données brutes (SIRENE CSV, INPI JSON, BODACC)] -->|Extraction| F[Table de liaison (siren)]
+    F -->|Jointures| E1[Établissement table]      /* siren → siret */
+    F -->|Jointures| E2[Evenement_Juridique table]
+    F -->|Jointures| E3[Bilan_Financier table]
+    F -->|Jointures| E4[Naf2025Projection table]   /* NAF 2025 */
+    style Raw fill:#bbf,stroke:#333,stroke-width:2px
+    style F fill:#cfc,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 4. Exemple de requête SQL (jointure d'entreprise avec établissement et événements)
 
 ```sql
--- Exemple : lister tous les établissements liés à une entreprise donnée
+-- Liste complète pour une entreprise donnée
 SELECT e.siren,
        et.siret,
        et.codeCommuneEtablissement,
+       et.codePostalEtablissement,
        ev.type_event,
-       bf.chiffre_affaires
+       ev.date_event,
+       bf.chiffre_affaires,
+       bf.resultat,
+       n.code_naf_2025
 FROM Entreprise e
 JOIN Etablissement et ON et.siren = e.siren
 LEFT JOIN Evenement_Juridique ev ON ev.siren = e.siren
 LEFT JOIN Bilan_Financier bf ON bf.siren = e.siren
+LEFT JOIN Naf2025Projection n ON n.siren = e.siren
 WHERE e.siren = '123456789';
 ```
 
 ---
 
-## Comment utiliser ces idées
+## 5. Comment utiliser ces idées
 
 1. **Charger** les données brutes (SIRENE CSV, INPI RNE JSON, BODACC extraits, bilans saisis) dans votre entrepôt de données (GCS → Parquet / BigQuery).  
-2. **Créer** les tables `entreprise`, `etablissement`, `evenement_juridique`, `bilan_financier`, `naf_2025_projection` en respectant les clés étrangères (`siren`, `siret`).  
+2. **Créer** les tables `Company`, `Establishment`, `LegalEvent`, `FinancialStatement`, `Naf2025Projection` en respectant les clés étrangères (`siren`, `siret`).  
 3. **Exécuter** les requêtes Mermaid‑inspirées ou traduites en SQL pour produire des rapports, des graphes interactifs ou des tableaux de bord (Power BI, Tableau, Looker, etc.).  
 4. **Personnaliser** les diagrammes Mermaid selon vos besoins (ajouter des nœuds « propriétaire », « siège », etc.) ; ils peuvent être rendus directement dans GitHub, MkDocs, ou tout outil de visualisation Mermaid.
 
 ---
 
 **Fichier créé** : `DATA_LINKING_IDEAS.md` sur la branche `feat/data-linking-ideas`.  
-Vous pouvez maintenantcommencer à ajouter les connecteurs, les tables et à enrichir les diagrammes Mermaid selon l'évolution de vos pipelines de données.
+Vous pouvez maintenant commencer à ajouter les connecteurs, les tables et à enrichir les diagrammes Mermaid selon l'évolution de vos pipelines de données.
