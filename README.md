@@ -95,6 +95,6 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-Les tests sont sans réseau. `.env.example` décrit les variables ; charger un `.env` privé explicitement avec `uv run --env-file .env ...`. Ne jamais intégrer les secrets à l'image ou aux variables OpenTofu.
+Les tests sont sans réseau. La CI GitHub (`.github/workflows/ci.yml`) lance ces vérifications sur chaque PR, ainsi que `tofu fmt -check` et `tofu validate` (sans identifiants GCP) ; `main` est protégée : passage par une PR et CI verte obligatoires. `.env.example` décrit les variables ; charger un `.env` privé explicitement avec `uv run --env-file .env ...`. Ne jamais intégrer les secrets à l'image ou aux variables OpenTofu.
 
 Les fichiers `infra/opentofu/rne*.tf` définissent Artifact Registry, les secrets, les Cloud Run Jobs `rne-bootstrap`, `rne-refresh` (commande `sync`) et `rne-materialize`, ainsi que le Scheduler quotidien. Tout est désactivé par défaut et activé dans `envs/rne-dev.tfvars`. Publier l'image, appliquer un plan ou lancer un téléchargement national nécessite une validation explicite.
