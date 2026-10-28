@@ -14,6 +14,7 @@ import simplejson
 from rne_fakes import MemoryStore
 
 from industrial_intelligence.ingestion.rne.common import (
+    Conflict,
     IngestionError,
     Paused,
     parse_time,
@@ -82,17 +83,18 @@ def prepared(entries=None, *, raw=None):
         "size": len(raw),
         "sha256": hashlib.sha256(raw).hexdigest(),
         "retrieved_at": DATE,
+        "remote": {"filename": "stock_RNE_20260304.zip"},
     }
     store.write_json(name + ".manifest.json", receipt)
     store.write_json(f"control/inpi/rne/stocks/{REVISION}.json", receipt)
     materializer = StockMaterializer(store)
-    root = f"bronze/inpi/rne/companies/snapshot_id={receipt['sha256']}/schema_version=1"
-    checkpoint = f"control/inpi/rne/materialize/{receipt['sha256']}/v1/checkpoint.json"
+    root = "bronze/inpi/rne/companies/stock/stock_RNE_20260304"
+    checkpoint = f"control/inpi/rne/materialize/{receipt['sha256']}/checkpoint.json"
     return store, materializer, root, checkpoint
 
 
 def part(store, root, number=1):
-    return store.read_json(f"{root}/manifests/part-{number:06d}.json")[0]
+    return store.read_json(f"{root}/_manifests/part-{number:06d}.json")[0]
 
 
 def table(store, manifest):
@@ -165,11 +167,11 @@ def test_partial_snapshot_is_not_published_as_complete_and_resumes_next_member()
     )
     first = materializer.run(REVISION, max_members=1)
     assert first["status"] == "partial" and first["members_done"] == 1
-    assert store.read_json(root + "/manifest.json")[0] is None
+    assert store.read_json(root + "/_manifest.json")[0] is None
     assert store.read_json(checkpoint)[0]["next_index"] == 1
     second = materializer.run(REVISION, max_members=1)
     assert second["status"] == "complete" and second["valid_rows"] == 2
-    snapshot = store.read_json(root + "/manifest.json")[0]
+    snapshot = store.read_json(root + "/_manifest.json")[0]
     assert len(snapshot["parts"]) == 2 and snapshot["members_total"] == 2
     assert snapshot["global_siren_uniqueness_checked"] is False
     before = list(store.uploaded)
@@ -187,7 +189,7 @@ def test_rejections_have_trace_and_reason_but_no_personal_values():
     row = json.loads(rejected)
     assert row["zip_row_number"] == 2 and row["zip_member"] == "stock_000001.json"
     assert "personal-value" not in rejected.decode() and "bad-id" not in rejected.decode()
-    assert store.read_json(root + "/manifest.json")[0]["quality_status"] == "requires_review"
+    assert store.read_json(root + "/_manifest.json")[0]["quality_status"] == "requires_review"
 
 
 @pytest.mark.parametrize(
@@ -218,7 +220,7 @@ def test_duplicates_are_counted_and_preserved_not_arbitrarily_dropped():
     result = materializer.run(REVISION, batch_rows=1)
     assert result["valid_rows"] == 2 and result["duplicate_sirens_within_members"] == 1
     assert table(store, part(store, root)).num_rows == 2
-    assert store.read_json(root + "/manifest.json")[0]["quality_status"] == "requires_review"
+    assert store.read_json(root + "/_manifest.json")[0]["quality_status"] == "requires_review"
 
 
 @pytest.mark.parametrize("payload", [b"{}", b"null", b"[", b"[{},", b"[] trailing"])
@@ -259,10 +261,19 @@ def test_final_manifest_failure_is_recoverable_without_reprocessing():
     store.fail_snapshot_once = True
     with pytest.raises(IngestionError):
         materializer.run(REVISION)
-    assert store.read_json(root + "/manifest.json")[0] is None
+    assert store.read_json(root + "/_manifest.json")[0] is None
     uploaded = list(store.uploaded)
     assert materializer.run(REVISION)["status"] == "complete"
     assert store.uploaded == uploaded
+
+
+def test_unacknowledged_output_from_a_crash_is_never_overwritten():
+    store, materializer, root, checkpoint = prepared()
+    store.put(root + "/_rejects/part-000001.jsonl.gz", b"left-by-a-crash")
+    with pytest.raises(Conflict):
+        materializer.run(REVISION)
+    assert store.objects[root + "/_rejects/part-000001.jsonl.gz"][0] == b"left-by-a-crash"
+    assert store.read_json(checkpoint)[0]["next_index"] == 0 and part(store, root) is None
 
 
 def test_completed_member_with_missing_output_is_not_reused():
@@ -371,10 +382,10 @@ def test_final_publication_detects_a_missing_previously_acknowledged_manifest():
         {"stock_000001.json": [company()], "stock_000002.json": [company("000000002")]}
     )
     materializer.run(REVISION)
-    del store.objects[root + "/manifests/part-000001.json"]
+    del store.objects[root + "/_manifests/part-000001.json"]
     with pytest.raises(IngestionError, match="missing member manifests"):
         materializer.run(REVISION)
-    assert store.read_json(root + "/manifest.json")[0] is None
+    assert store.read_json(root + "/_manifest.json")[0] is None
 
 
 def test_final_publication_checks_totals_against_independent_member_manifests():
@@ -384,17 +395,17 @@ def test_final_publication_checks_totals_against_independent_member_manifests():
     materializer.run(REVISION)
     manifest = part(store, root)
     manifest["valid_rows"] += 1
-    store.put(root + "/manifests/part-000001.json", manifest)
+    store.put(root + "/_manifests/part-000001.json", manifest)
     with pytest.raises(IngestionError, match="row counts differ"):
         materializer.run(REVISION)
-    assert store.read_json(root + "/manifest.json")[0] is None
+    assert store.read_json(root + "/_manifest.json")[0] is None
     assert store.read_json(checkpoint)[0]["next_index"] == 2
 
 
 def test_completed_snapshot_must_still_match_the_checkpoint():
     store, materializer, root, _ = prepared()
     materializer.run(REVISION)
-    manifest_name = root + "/manifest.json"
+    manifest_name = root + "/_manifest.json"
     manifest = store.read_json(manifest_name)[0]
     manifest["valid_rows"] += 1
     store.put(manifest_name, manifest)

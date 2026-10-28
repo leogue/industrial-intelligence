@@ -59,7 +59,7 @@ Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 28/10/
 - bucket `gs://industrial-intelligence-dev-data` : `EU` multi-région, privé, `force_destroy = false` ;
 - Artifact Registry `rne` (`europe-west9`) et 4 secrets INPI dans Secret Manager ;
 - Cloud Run Jobs `rne-bootstrap`, `rne-materialize`, `rne-refresh` (`sync`), et Scheduler `rne-refresh-daily` toutes les 6 h ;
-- données RNE sous le préfixe `sandbox/leo/inpi/rne`. Rien d'autre (BigQuery, Workflows…) n'est créé.
+- données RNE sous le préfixe `inpi/rne` (`raw/`, `bronze/`, `control/`). Rien d'autre (BigQuery, Workflows…) n'est créé.
 
 Règles :
 
@@ -68,7 +68,7 @@ Règles :
 - L'état OpenTofu est **local, sur le poste de Léo** : un seul opérateur à la fois, et sauvegarder `terraform.tfstate` avant chaque apply.
 - Ne pas changer la région, le nom, l'accès public ni `force_destroy` du bucket : sa localisation ne se modifie pas sans le recréer.
 - Images Cloud Run : `docker build --platform linux/amd64 -f Dockerfile.rne`, épinglées **par digest** dans les tfvars. Procédure complète : `docs/rne/inpi-ingestion.md`.
-- Pendant le développement : petits échantillons, limites explicites, préfixe GCS personnel (`sandbox/<prénom>/…`). Ne jamais écraser des données partagées.
+- Essais : petits échantillons, limites explicites. Ne jamais écraser des données existantes.
 - Authentification par ADC uniquement (`gcloud auth application-default login`) : jamais de clé JSON de service account. Les identifiants `gcloud` CLI et ADC peuvent différer.
 
 ## Données : règles métier

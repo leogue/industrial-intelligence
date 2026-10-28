@@ -33,7 +33,7 @@ class MemoryStore:
             raise IngestionError("simulated checkpoint failure")
         if (
             self.fail_snapshot_once
-            and name.endswith("/manifest.json")
+            and name.endswith("/_manifest.json")
             and name.startswith("bronze/")
         ):
             self.fail_snapshot_once = False
