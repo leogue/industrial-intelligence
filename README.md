@@ -85,7 +85,7 @@ Trois commandes :
 - **`materialize`** : convertit le ZIP en Parquet Bronze (fait) ;
 - **`sync --start 2026-03-01T00:00:00Z`** : collecte les changements API depuis la borne supposée du stock, puis chaque jour la veille. Il n'y a qu'un seul checkpoint, et un job budgété qui reprend là où il s'est arrêté.
 
-**Le nouveau `sync` n'est pas encore déployé** : le job Cloud Run actuel exécute encore l'ancien rejeu depuis 2023. Voir la [mise en service](docs/inpi-ingestion.md#mise-en-service-à-faire-avec-accord).
+**Déployé en dev le 28/10/2026** : `rne-refresh` exécute `sync` toutes les 6 h et rattrape le trou depuis le 1er mars (≈ 2 semaines estimées si le quota INPI le permet). Suivi : événement `command_completed` dans Cloud Logging, champ `days_behind` ([détails](docs/inpi-ingestion.md#suivi--logs-structurés-cloud-logging)).
 
 ```sh
 uv sync --locked

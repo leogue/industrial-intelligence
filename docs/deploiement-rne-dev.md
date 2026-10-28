@@ -384,3 +384,16 @@ Les tarifs indicatifs consultés avant la phase 1 sont hors quotas gratuits et h
 Le Scheduler créé est facturé jusqu'à **0,10 USD/mois hors quota gratuit, même en pause**. Les deux tests de démarrage et le transfert de 11 min 50 s peuvent être facturés selon les règles/minimums Cloud Run ; les durées observées ne sont pas des montants facturés. Les **15,14 Go de stockage GCS continuent d'être facturés tant que l'objet est conservé**. Aucun plafond automatique, budget ni alerte n'a été créé ; la facture réelle n'a pas été vérifiée.
 
 Suite : suivre `rne-refresh-qm62q` puis les exécutions quotidiennes, surveiller la couverture récente/historique, les quotas, les blocages et la facture réelle. Le catalogue courant GCS et la planification sont désormais disponibles ; ne pas reconfigurer une fausse borne du stock ni relancer une initialisation sur les checkpoints existants. La qualité du stock (rejet/répétitions), la couverture historique complète, une éventuelle récupération du gros objet et la rétention/purge des anciennes versions restent à vérifier. Les budgets applicatifs ne plafonnent pas la facture. La voie ancienne avec cutoff vérifié reste une alternative explicite, pas une modification à appliquer au mode sync opérationnel.
+
+## 28 octobre — sync simplifié déployé
+
+Remplacement du rejeu intégral depuis 2023 par le `sync` à checkpoint unique, ainsi que des logs structurés Cloud Logging. Le fonctionnement est décrit dans [inpi-ingestion.md](inpi-ingestion.md).
+
+- **Essai local réel**, préfixe isolé `sandbox/leo/inpi/rne-smoke` : fenêtre 01/03/2026 00:00–01:00 UTC, **4 appels API, 8 fiches**, 1 page brute et 1 Parquet relu (8 lignes, `source_kind=diff`). Ces objets d'essai sont conservés.
+- **Code** : commit `deac8a8` sur `feat/rne-materialization`. 112 tests hors réseau, Ruff et `tofu validate` réussis.
+- **Image** linux/amd64 publiée : `europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:b65d416cfb6861a8954023c67944442e483f6e5ddc6e7c111af208d037eeb068` (tag `dev-deac8a8-amd64`).
+- **Plan appliqué** : 0 création, 4 modifications, 4 suppressions. Les 3 jobs passent sur la nouvelle image. `rne-refresh` reçoit `sync --start 2026-03-01T00:00:00Z --max-requests 10000 --max-seconds 20000`, et `rne-bootstrap` perd `--archive-only`/`RNE_INITIAL_FROM`. Le cron du Scheduler passe de `0 5 * * *` à `0 */6 * * *` (état `ENABLED`). Les 4 droits IAM `silver/` sont supprimés. L'état a été sauvegardé avant l'application, et le plan suivant ne montre aucun écart.
+- **Exécution cloud manuelle** `rne-refresh-kb7rr`, bornée à 100 appels et 600 s : réussie. Elle a collecté **1 789 fiches** en 3 fenêtres et créé le checkpoint `control/sandbox/leo/inpi/rne/diff/checkpoint.json`. Elle s'est arrêtée en `partial` (budget atteint) avec `completed_until=2026-03-02T06:00:00Z`. Les logs sont visibles dans Cloud Logging avec `severity`, `jsonPayload.event` et le label `app=rne-ingest`.
+- **Inchangé** : les anciens checkpoints (`control/…/checkpoint.json`, `control/…/live/`), les pages et Bronze de l'ancien rejeu, ainsi que le catalogue `silver/`. Rien n'a été supprimé. Les secrets et le bucket sont inchangés.
+
+Suite : le Scheduler poursuit le rattrapage à partir du 29/10 00:00 UTC. Surveiller `days_behind` (≈ 238,75 jours après l'essai) et d'éventuels `api_retry` en 429, signe d'un quota INPI.

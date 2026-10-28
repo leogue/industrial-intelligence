@@ -1,6 +1,6 @@
 # Ingestion RNE — stock FTP + différentiel quotidien
 
-**État : code local, pas encore déployé.** Le job Cloud Run actuel tourne encore avec l'ancienne image (rejeu depuis 2023, voir [le journal](deploiement-rne-dev.md)). La [mise en service](#mise-en-service-à-faire-avec-accord) se fait en une étape, décrite plus bas.
+**État : déployé en dev le 28 octobre 2026** (image du commit `deac8a8`, Scheduler toutes les 6 h). Le rattrapage depuis le 1er mars est en cours. Voir [le journal](deploiement-rne-dev.md#28-octobre--sync-simplifié-déployé).
 
 ## Le principe
 
@@ -124,7 +124,7 @@ uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 
 Variables : `RNE_BUCKET`, `RNE_PREFIX`, `INPI_USERNAME`/`INPI_PASSWORD` (API, compte personnel), `INPI_FTP_USERNAME`/`INPI_FTP_PASSWORD` (FTP, compte technique distinct), `RNE_STOCK_FILE`. Voir `.env.example`. Aucune clé de service account : GCS passe par ADC.
 
-## Mise en service (à faire, avec accord)
+## Mise en service (effectuée le 28/10/2026, procédure conservée)
 
 Le nouveau `sync` écrit sous de **nouveaux chemins** (`control/…/diff/`, `raw|bronze/…/companies/diff/`). Les anciens checkpoints, pages et le catalogue Silver restent intacts : il n'y a rien à migrer ni à effacer.
 
