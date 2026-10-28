@@ -136,9 +136,7 @@ def discover_parquet_resources() -> list[dict[str, Any]]:
     return resources
 
 
-def sync_resource_to_gcs(
-    resource: dict[str, Any], storage_client: storage.Client
-) -> bool:
+def sync_resource_to_gcs(resource: dict[str, Any], storage_client: storage.Client) -> bool:
     """Télécharge la ressource en streaming vers GCS de manière idempotente."""
     filename = resource["url"].split("/")[-1]
     gcs_path = f"raw/sirene/{filename}"
@@ -150,14 +148,10 @@ def sync_resource_to_gcs(
         blob.reload()
         existing_sha1 = (blob.metadata or {}).get("checksum_sha1")
         if existing_sha1 and existing_sha1 == resource["checksum_value"]:
-            logging.info(
-                f"[SKIP] {filename} est déjà à jour dans GCS (SHA-1: {existing_sha1})."
-            )
+            logging.info(f"[SKIP] {filename} est déjà à jour dans GCS (SHA-1: {existing_sha1}).")
             return False
 
-    logging.info(
-        f"[START] Téléchargement de {filename} ({resource['filesize']:,} octets)..."
-    )
+    logging.info(f"[START] Téléchargement de {filename} ({resource['filesize']:,} octets)...")
 
     # 2. Streaming chunk par chunk et calcul du hash à la volée
     sha1 = hashlib.sha1()
@@ -192,9 +186,7 @@ def sync_resource_to_gcs(
     }
     blob.patch()
 
-    logging.info(
-        f"[SUCCESS] {filename} ingéré avec succès dans gs://{GCS_BUCKET_NAME}/{gcs_path}"
-    )
+    logging.info(f"[SUCCESS] {filename} ingéré avec succès dans gs://{GCS_BUCKET_NAME}/{gcs_path}")
     return True
 ```
 

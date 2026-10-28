@@ -3,10 +3,10 @@
 # Image du commit deac8a8 (sync simplifié + logs structurés), publiée par digest.
 enable_rne_prerequisites = true
 enable_rne_ingestion     = true
-rne_schedule_enabled    = true
-rne_region              = "europe-west9"
-rne_prefix              = "sandbox/leo/inpi/rne"
-rne_image               = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:b65d416cfb6861a8954023c67944442e483f6e5ddc6e7c111af208d037eeb068"
+rne_schedule_enabled     = true
+rne_region               = "europe-west9"
+rne_prefix               = "sandbox/leo/inpi/rne"
+rne_image                = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:b65d416cfb6861a8954023c67944442e483f6e5ddc6e7c111af208d037eeb068"
 
 rne_stock_file = "stock_RNE_formalites_NIVEAU1_20260304_1400.zip"
 
