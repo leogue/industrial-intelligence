@@ -1,6 +1,6 @@
 # Ingestion RNE — stock FTP + différentiel quotidien
 
-**État : déployé en dev le 28 octobre 2026** (image du commit `deac8a8`, Scheduler toutes les 6 h). Le rattrapage depuis le 1er mars est en cours. Voir [le journal](deploiement-rne-dev.md#28-octobre--sync-simplifié-déployé).
+**État : déployé en dev le 28 octobre 2026** (image du commit `deac8a8`, Scheduler toutes les 6 h). Le rattrapage depuis le 1er mars est en cours. Voir [le journal](../archives/deploiement-rne-dev.md#28-octobre--sync-simplifié-déployé).
 
 ## Le principe
 

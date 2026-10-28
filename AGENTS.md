@@ -67,7 +67,7 @@ Règles :
 - Toujours planifier avec les deux fichiers : `tofu plan -var-file=envs/dev.tfvars -var-file=envs/rne-dev.tfvars -out=<nom>.tfplan`. Sans `rne-dev.tfvars`, le plan propose de détruire les ressources RNE.
 - L'état OpenTofu est **local, sur le poste de Léo** : un seul opérateur à la fois, et sauvegarder `terraform.tfstate` avant chaque apply.
 - Ne pas changer la région, le nom, l'accès public ni `force_destroy` du bucket : sa localisation ne se modifie pas sans le recréer.
-- Images Cloud Run : `docker build --platform linux/amd64 -f Dockerfile.rne`, épinglées **par digest** dans les tfvars. Procédure complète : `docs/inpi-ingestion.md`.
+- Images Cloud Run : `docker build --platform linux/amd64 -f Dockerfile.rne`, épinglées **par digest** dans les tfvars. Procédure complète : `docs/rne/inpi-ingestion.md`.
 - Pendant le développement : petits échantillons, limites explicites, préfixe GCS personnel (`sandbox/<prénom>/…`). Ne jamais écraser des données partagées.
 - Authentification par ADC uniquement (`gcloud auth application-default login`) : jamais de clé JSON de service account. Les identifiants `gcloud` CLI et ADC peuvent différer.
 
@@ -88,7 +88,7 @@ Règles :
 - Le JWT de login dure 24 h. Ne jamais l'afficher, le logger ni le commiter.
 - Les identifiants FTP (stock, `www.inpi.net`) et SFTP/API (compte personnel) sont **distincts** : ne jamais les intervertir.
 - Les `bilansSaisis` sont déjà en JSON : pas d'OCR dessus. Un HTTP 500 sur l'historique ne prouve pas une absence de droits : tracer l'erreur, réessayer raisonnablement, continuer.
-- Ne pas inventer d'endpoint ni de paramètre : se référer aux docs techniques INPI citées dans `docs/inpi.md`.
+- Ne pas inventer d'endpoint ni de paramètre : se référer aux docs techniques INPI citées dans `docs/rne/inpi.md`.
 
 ## Connecteurs et logs
 

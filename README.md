@@ -70,12 +70,7 @@ gcloud services enable storage.googleapis.com --project=industrial-intelligence-
 
 ## Ingestion INPI RNE
 
-- [**Fonctionnement de l'ingestion, commandes, durée et mise en service**](docs/inpi-ingestion.md) — référence à jour.
-- [Exploration des accès et données INPI](docs/inpi.md).
-- [Matérialisation du stock JSON en Parquet](docs/inpi-materialisation.md).
-- [Historique depuis 2023 : ce que le stock contient déjà](docs/inpi-historique.md).
-- [Coûts mesurés](docs/couts-rne-dev.md) et [journal des opérations réellement effectuées](docs/deploiement-rne-dev.md).
-- Historique des anciennes approches : [sync avec catalogue](docs/inpi-sync.md), [rejeu intégral](docs/inpi-reconciliation.md), [audit du rejeu](docs/inpi-estimation-rattrapage.md), [qualification du différentiel](docs/inpi-quotidien.md).
+Le [guide d'ingestion RNE](docs/rne/inpi-ingestion.md) est la référence pour le fonctionnement, les commandes, le suivi et la mise en service.
 
 Le stock national est archivé et converti : **5 470 fichiers, 27 348 472 lignes valides** (1 rejet, 822 répétitions de SIREN à examiner). Il correspond à environ mars 2026.
 
@@ -85,7 +80,7 @@ Trois commandes :
 - **`materialize`** : convertit le ZIP en Parquet Bronze (fait) ;
 - **`sync --start 2026-03-01T00:00:00Z`** : collecte les changements API depuis la borne supposée du stock, puis chaque jour la veille. Il n'y a qu'un seul checkpoint, et un job budgété qui reprend là où il s'est arrêté.
 
-**Déployé en dev le 28/10/2026** : `rne-refresh` exécute `sync` toutes les 6 h et rattrape le trou depuis le 1er mars (≈ 2 semaines estimées si le quota INPI le permet). Suivi : événement `command_completed` dans Cloud Logging, champ `days_behind` ([détails](docs/inpi-ingestion.md#suivi--logs-structurés-cloud-logging)).
+**Déployé en dev le 28/10/2026** : `rne-refresh` exécute `sync` toutes les 6 h et rattrape le trou depuis le 1er mars (≈ 2 semaines estimées si le quota INPI le permet). Suivi : événement `command_completed` dans Cloud Logging, champ `days_behind` ([détails](docs/rne/inpi-ingestion.md#suivi--logs-structurés-cloud-logging)).
 
 ```sh
 uv sync --locked
@@ -98,3 +93,9 @@ uv run ruff format --check .
 Les tests sont sans réseau. La CI GitHub (`.github/workflows/ci.yml`) lance ces vérifications sur chaque PR, ainsi que `tofu fmt -check` et `tofu validate` (sans identifiants GCP) ; `main` est protégée : passage par une PR et CI verte obligatoires. `.env.example` décrit les variables ; charger un `.env` privé explicitement avec `uv run --env-file .env ...`. Ne jamais intégrer les secrets à l'image ou aux variables OpenTofu.
 
 Les fichiers `infra/opentofu/rne*.tf` définissent Artifact Registry, les secrets, les Cloud Run Jobs `rne-bootstrap`, `rne-refresh` (commande `sync`) et `rne-materialize`, ainsi que le Scheduler quotidien. Tout est désactivé par défaut et activé dans `envs/rne-dev.tfvars`. Publier l'image, appliquer un plan ou lancer un téléchargement national nécessite une validation explicite.
+
+## Documentation
+
+- **[RNE](docs/rne/)** : [guide principal d'ingestion](docs/rne/inpi-ingestion.md), exploration INPI, schéma Parquet, historique des données et coûts.
+- **[SIRENE](docs/sirene/)** : [accès aux données](docs/sirene/sirene.md), dictionnaires des stocks et propositions de modélisation.
+- **[Archives](docs/archives/)** : anciennes approches, audits, brouillon de contact INPI et journal des opérations. Ces documents ne sont pas des procédures actuelles.

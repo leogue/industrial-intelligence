@@ -43,7 +43,7 @@ Les fichiers sont convertis automatiquement en Parquet par data.gouv.fr à l'aid
 
 ## 3. Stratégie d'Idempotence : Comment éviter de re-télécharger l'existant ?
 
-Pour respecter les principes de [`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md) (pas de surcoût réseau/stockage GCP, idempotence stricte, pas de saturation mémoire) :
+Pour respecter les principes de [`AGENTS.md`](../../AGENTS.md) (pas de surcoût réseau/stockage GCP, idempotence stricte, pas de saturation mémoire) :
 
 ```mermaid
 flowchart TD
@@ -89,7 +89,7 @@ En complément de l'API, une requête HTTP `HEAD` sur l'URL directe du fichier C
 
 ## 4. Implémentation de Référence du Connecteur (Python)
 
-Conforme au contrat de connecteur défini dans [`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md) Section 7 :
+Conforme au contrat de connecteur défini dans [`AGENTS.md`](../../AGENTS.md) Section 7 :
 1. `discover()` : interroge l'API data.gouv.fr et filtre les Parquet.
 2. `is_already_ingested()` : compare l'empreinte distante avec les métadonnées de l'objet GCS (`metadata["checksum_sha1"]`).
 3. `ingest()` : streaming par chunks sans charger les 2,2 Go en RAM, calcul de hash à la volée et checkpoint validé uniquement après succès.
@@ -194,7 +194,7 @@ def sync_resource_to_gcs(resource: dict[str, Any], storage_client: storage.Clien
 
 ## 5. Convention de Stockage GCS pour SIRENE
 
-Conformément à la convention de nommage de [`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md) Section 6 :
+Conformément à la convention de nommage de [`AGENTS.md`](../../AGENTS.md) Section 6 :
 
 ```text
 gs://industrial-intelligence-dev-data/

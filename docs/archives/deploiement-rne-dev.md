@@ -1,6 +1,6 @@
 # Déploiement RNE de développement — journal du 22 octobre 2026
 
-Ce journal décrit les actions **réellement effectuées**, à distinguer du [guide de déploiement](inpi-ingestion.md) et des plans préparés mais non appliqués.
+Ce journal décrit les actions **réellement effectuées**, à distinguer du [guide de déploiement](../rne/inpi-ingestion.md) et des plans préparés mais non appliqués.
 
 ## Cible et protections
 
@@ -219,7 +219,7 @@ L'utilisateur a choisi de conserver une seule tâche et de n'augmenter les resso
 | Limites conservées | 128 MiB par membre, lots de 500 lignes / environ 8 MiB |
 | Source | ZIP GCS existant et génération épinglée, aucun nouveau transfert FTP |
 
-La commande exacte et la lecture du statut sont dans [inpi-materialisation.md](inpi-materialisation.md). Le timeout de 24 h est limité à cette exécution ; le défaut du job reste à 6 h. Aucun plafond financier automatique n'a été créé : l'estimation annoncée avant lancement était plusieurs heures et quelques dollars de calcul hors quotas gratuits, plus stockage/opérations, à vérifier sur la facture.
+La commande exacte et la lecture du statut sont dans [inpi-materialisation.md](../rne/inpi-materialisation.md). Le timeout de 24 h est limité à cette exécution ; le défaut du job reste à 6 h. Aucun plafond financier automatique n'a été créé : l'estimation annoncée avant lancement était plusieurs heures et quelques dollars de calcul hors quotas gratuits, plus stockage/opérations, à vérifier sur la facture.
 
 **Contrôle réel à 20:15:57 UTC : 66 / 5 470 membres, 330 001 lignes valides, 0 rejet, 1 répétition locale de SIREN.** Cette répétition est conservée, pas arbitrée ; les lignes ne sont donc pas présentées comme autant d'entreprises distinctes. L'unicité nationale reste non vérifiée. Le manifeste global est encore absent : **la conversion est lancée et progresse, pas déclarée complète**.
 
@@ -387,7 +387,7 @@ Suite : suivre `rne-refresh-qm62q` puis les exécutions quotidiennes, surveiller
 
 ## 28 octobre — sync simplifié déployé
 
-Remplacement du rejeu intégral depuis 2023 par le `sync` à checkpoint unique, ainsi que des logs structurés Cloud Logging. Le fonctionnement est décrit dans [inpi-ingestion.md](inpi-ingestion.md).
+Remplacement du rejeu intégral depuis 2023 par le `sync` à checkpoint unique, ainsi que des logs structurés Cloud Logging. Le fonctionnement est décrit dans [inpi-ingestion.md](../rne/inpi-ingestion.md).
 
 - **Essai local réel**, préfixe isolé `sandbox/leo/inpi/rne-smoke` : fenêtre 01/03/2026 00:00–01:00 UTC, **4 appels API, 8 fiches**, 1 page brute et 1 Parquet relu (8 lignes, `source_kind=diff`). Ces objets d'essai sont conservés.
 - **Code** : commit `deac8a8` sur `feat/rne-materialization`. 112 tests hors réseau, Ruff et `tofu validate` réussis.
