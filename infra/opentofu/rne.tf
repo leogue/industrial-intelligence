@@ -9,8 +9,16 @@ locals {
     ] : []
   ))
   rne_jobs = var.enable_rne_ingestion ? {
-    bootstrap = { timeout = "86400s", args = ["bootstrap", "--allow-large-download"] }
-    refresh   = { timeout = "21600s", args = ["refresh"] }
+    bootstrap = {
+      timeout = "86400s"
+      args    = ["bootstrap", "--allow-large-download"]
+    }
+    # Same command on every run: catches up from the stock boundary, then collects D-1.
+    # The ~5.5 h soft budget ends before the 6 h timeout and the next 6-hourly run.
+    refresh = {
+      timeout = "21600s"
+      args    = ["sync", "--start", var.rne_sync_start, "--max-requests", "10000", "--max-seconds", "20000"]
+    }
   } : {}
   rne_secrets = var.enable_rne_prerequisites || var.enable_rne_ingestion ? {
     ftp_username = { job = "bootstrap", env = "INPI_FTP_USERNAME" }
@@ -102,6 +110,20 @@ resource "google_storage_bucket_iam_member" "rne_control" {
   }
 }
 
+resource "google_storage_bucket_iam_member" "rne_refresh_bronze" {
+  for_each = var.enable_rne_ingestion ? {
+    create = "roles/storage.objectCreator"
+    read   = "roles/storage.objectViewer"
+  } : {}
+  bucket = google_storage_bucket.data.name
+  role   = each.value
+  member = "serviceAccount:${google_service_account.rne_job["refresh"].email}"
+  condition {
+    title      = "rne_refresh_bronze_${each.key}"
+    expression = "resource.name.startsWith('projects/_/buckets/${google_storage_bucket.data.name}/objects/bronze/${var.rne_prefix}/')"
+  }
+}
+
 resource "google_cloud_run_v2_job" "rne" {
   for_each            = local.rne_jobs
   project             = var.project_id
@@ -120,7 +142,7 @@ resource "google_cloud_run_v2_job" "rne" {
         image = var.rne_image
         args  = each.value.args
         resources {
-          limits = { cpu = "1", memory = "1Gi" }
+          limits = { cpu = "1", memory = each.key == "refresh" ? "2Gi" : "1Gi" }
         }
         env {
           name  = "RNE_BUCKET"
@@ -132,8 +154,7 @@ resource "google_cloud_run_v2_job" "rne" {
         }
         dynamic "env" {
           for_each = each.key == "bootstrap" ? {
-            RNE_STOCK_FILE   = var.rne_stock_file
-            RNE_INITIAL_FROM = var.rne_initial_from
+            RNE_STOCK_FILE = var.rne_stock_file
           } : {}
           content {
             name  = env.key
@@ -160,13 +181,18 @@ resource "google_cloud_run_v2_job" "rne" {
       condition     = var.rne_image != ""
       error_message = "Publier l'image et renseigner rne_image par digest avant d'activer les jobs."
     }
+    precondition {
+      condition     = var.rne_sync_start != ""
+      error_message = "Renseigner rne_sync_start : borne supposée du stock, point de départ du différentiel."
+    }
   }
   depends_on = [
     google_project_service.rne,
     google_secret_manager_secret_iam_member.rne,
     google_storage_bucket_iam_member.rne_raw_create,
     google_storage_bucket_iam_member.rne_raw_read,
-    google_storage_bucket_iam_member.rne_control
+    google_storage_bucket_iam_member.rne_control,
+    google_storage_bucket_iam_member.rne_refresh_bronze
   ]
 }
 
@@ -198,9 +224,9 @@ resource "google_cloud_scheduler_job" "rne_refresh" {
   paused      = !var.rne_schedule_enabled
 
   attempt_deadline = "30s"
-  retry_config {
-    retry_count = 0
-  }
+  # Defaults retryCount=0 + maxRetryDuration=0 disable retries between cron runs.
+  # The API omits an all-zero retry_config; declaring it causes a permanent diff.
+  # https://cloud.google.com/scheduler/docs/configuring/retry-jobs
   http_target {
     http_method = "POST"
     uri         = "https://run.googleapis.com/v2/${google_cloud_run_v2_job.rne["refresh"].id}:run"

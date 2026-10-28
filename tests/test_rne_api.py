@@ -1,11 +1,13 @@
+from contextlib import nullcontext
 from datetime import timedelta
+from unittest.mock import Mock
 
 import httpx
 import pytest
 
-from industrial_intelligence.ingestion.rne.api import RneApi
 from industrial_intelligence.ingestion.rne.cli import main
 from industrial_intelligence.ingestion.rne.common import IngestionError, Paused, parse_time
+from industrial_intelligence.ingestion.rne.sources import RneApi
 
 START = parse_time("2020-01-01T00:00:00Z")
 END = START + timedelta(hours=1)
@@ -142,7 +144,7 @@ def test_count_must_have_documented_shape(value):
         return httpx.Response(200, json=value)
 
     with pytest.raises(IngestionError):
-        api_for(handler).count_over_limit(START, END)
+        api_for(handler).count(START, END)
 
 
 def test_count_can_signal_over_10000_without_exact_number():
@@ -151,7 +153,7 @@ def test_count_can_signal_over_10000_without_exact_number():
             return httpx.Response(200, json={"token": "test-token"})
         return httpx.Response(200, json={"isNbResultsOver10000": True})
 
-    assert api_for(handler).count_over_limit(START, END)
+    assert api_for(handler).count(START, END) is None
 
 
 def test_timezone_required():
@@ -160,11 +162,77 @@ def test_timezone_required():
     assert parse_time("2020-01-01T01:00:00+01:00") == START
 
 
+def test_quota_exhaustion_pauses_cleanly_instead_of_failing():
+    api = api_for(lambda request: httpx.Response(429), attempts=2)
+    with pytest.raises(Paused, match="quota"):
+        api.count(START, END)
+
+
 def test_cli_fails_without_bootstrap_parameters_before_any_cloud_access(monkeypatch, capsys):
     monkeypatch.delenv("RNE_STOCK_FILE", raising=False)
-    monkeypatch.delenv("RNE_INITIAL_FROM", raising=False)
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.cli.GcsStore", lambda *a: object())
     assert main(["--bucket", "test", "bootstrap"]) == 1
     assert "requires" in capsys.readouterr().out
+
+
+def test_cli_bootstrap_archives_with_ftp_credentials_only(monkeypatch, capsys):
+    monkeypatch.setenv("INPI_FTP_USERNAME", "unit-user")
+    monkeypatch.setenv("INPI_FTP_PASSWORD", "unit-password")
+    archive = Mock(return_value={"status": "archived"})
+    monkeypatch.setattr(
+        "industrial_intelligence.ingestion.rne.cli.StockFtp", lambda *a: nullcontext(object())
+    )
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.cli.GcsStore", lambda *a: object())
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.bootstrap.archive_stock", archive)
+    assert (
+        main(["--bucket", "test", "bootstrap", "--stock-file", "stock_RNE_formalites_test.zip"])
+        == 0
+    )
+    assert archive.call_args.args[3] == "stock_RNE_formalites_test.zip"
+    assert "unit-password" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["refresh"],
+        ["prepare-sync", "--stock-revision", "b" * 64],
+        ["current-status"],
+        ["sync"],  # The stock boundary is always explicit.
+    ],
+)
+def test_cli_only_has_bootstrap_materialize_and_sync(args):
+    with pytest.raises(SystemExit) as error:
+        main(args)
+    assert error.value.code == 2
+
+
+def test_cli_materialize_is_bounded_by_default_and_needs_no_inpi_credentials(monkeypatch):
+    for variable in ("INPI_USERNAME", "INPI_PASSWORD", "INPI_FTP_USERNAME", "INPI_FTP_PASSWORD"):
+        monkeypatch.delenv(variable, raising=False)
+    worker = Mock()
+    worker.run.return_value = {"status": "partial"}
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.cli.GcsStore", lambda *a: object())
+    monkeypatch.setattr(
+        "industrial_intelligence.ingestion.rne.materialize.StockMaterializer", lambda *a: worker
+    )
+    assert main(["--bucket", "test", "materialize", "--stock-revision", "b" * 64]) == 0
+    assert worker.run.call_args.kwargs["max_members"] == 1
+    assert worker.run.call_args.kwargs["max_input_bytes"] == 128 * 1024**2
+
+
+def test_cli_sync_passes_the_boundary_and_a_closed_day(monkeypatch):
+    monkeypatch.setenv("INPI_USERNAME", "unit-user")
+    monkeypatch.setenv("INPI_PASSWORD", "unit-password")
+    worker = Mock()
+    worker.run.return_value = {"status": "partial"}
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.cli.GcsStore", lambda *a: object())
+    monkeypatch.setattr("industrial_intelligence.ingestion.rne.diff.DiffSync", lambda *a: worker)
+    assert main(["--bucket", "test", "sync", "--start", "2026-03-01T00:00:00Z"]) == 0
+    api, start, until = worker.run.call_args.args
+    assert api.page_size == 100 and api.max_requests == 10000
+    assert start == parse_time("2026-03-01T00:00:00Z")
+    assert until.hour == until.minute == until.second == 0
 
 
 def test_cli_unknown_exception_is_redacted(monkeypatch, capsys):
@@ -172,5 +240,5 @@ def test_cli_unknown_exception_is_redacted(monkeypatch, capsys):
         raise RuntimeError("never-log-this-password")
 
     monkeypatch.setattr("industrial_intelligence.ingestion.rne.cli.run", fail)
-    assert main(["--bucket", "test", "refresh"]) == 1
+    assert main(["--bucket", "test", "sync", "--start", "2026-03-01T00:00:00Z"]) == 1
     assert "never-log" not in capsys.readouterr().out
