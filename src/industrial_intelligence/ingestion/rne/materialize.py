@@ -9,7 +9,6 @@ import hashlib
 import logging
 import re
 import time
-import uuid
 import zipfile
 
 import ijson
@@ -157,7 +156,7 @@ class StockMaterializer:
         return receipt
 
     def _member_manifest(self, root, index):
-        return f"{root}/manifests/part-{index + 1:06d}.json"
+        return f"{root}/_manifests/part-{index + 1:06d}.json"
 
     def _validate_part(self, part, source, member):
         if (
@@ -177,10 +176,9 @@ class StockMaterializer:
                 raise IngestionError("Validated output missing or generation/size changed")
 
     def _extract(self, archive, member, source, root, index, batch_rows, max_batch_bytes):
-        attempt = uuid.uuid4().hex
         part_id = f"part-{index + 1:06d}"
-        data_name = f"{root}/parts/{part_id}/{attempt}.parquet"
-        rejects_name = f"{root}/rejects/{part_id}/{attempt}.jsonl.gz"
+        data_name = f"{root}/{part_id}.parquet"
+        rejects_name = f"{root}/_rejects/{part_id}.jsonl.gz"
         outcome = {}
 
         def produce_data(data_stream):
@@ -203,7 +201,8 @@ class StockMaterializer:
             )
             return outcome["parquet"]
 
-        # Unique attempt paths: a crash cannot require overwriting a finished original.
+        # Fixed names so a glob reads the snapshot. Bronze is create-only: output left
+        # by a crash before its manifest makes the rerun fail; delete it by hand.
         outcome["parquet"] = self.store.upload_stream(
             data_name, produce_data, content_type="application/vnd.apache.parquet"
         )
@@ -224,7 +223,7 @@ class StockMaterializer:
         }
 
     def _publish_snapshot(self, root, source, members, state):
-        manifest_name = root + "/manifest.json"
+        manifest_name = root + "/_manifest.json"
         manifest, _ = self.store.read_json(manifest_name)
         if manifest is not None:
             if any(manifest.get(key) != value for key, value in state.items()):
@@ -332,14 +331,9 @@ class StockMaterializer:
             raise IngestionError("Invalid materialization limits")
         started = time.monotonic()
         source = self._source(revision)
-        root = (
-            f"bronze/{self.prefix}/companies/snapshot_id={source['sha256']}"
-            f"/schema_version={SCHEMA_VERSION}"
-        )
-        checkpoint = (
-            f"control/{self.prefix}/materialize/{source['sha256']}"
-            f"/v{SCHEMA_VERSION}/checkpoint.json"
-        )
+        stock_name = source["remote"]["filename"].removesuffix(".zip")
+        root = f"bronze/{self.prefix}/companies/stock/{stock_name}"
+        checkpoint = f"control/{self.prefix}/materialize/{source['sha256']}/checkpoint.json"
         with (
             self.store.open_reader(source["object"], generation=source["generation"]) as reader,
             zipfile.ZipFile(reader) as archive,

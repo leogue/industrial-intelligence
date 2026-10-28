@@ -7,7 +7,7 @@
 ```text
 FTP INPI : stock_RNE_formalites_NIVEAU1_20260304_1400.zip  (photo du registre ≈ mars 2026)
    │ bootstrap     → raw/{prefix}/stocks/.../*.zip                      (fait, 15 Go)
-   │ materialize   → bronze/{prefix}/companies/snapshot_id=.../*.parquet (fait, 27,3 M lignes)
+   │ materialize   → bronze/{prefix}/companies/stock/{nom_du_zip}/*.parquet (27,3 M lignes)
    ▼
 API /companies/diff : fiches modifiées depuis le 1er mars 2026
    │ sync (chaque jour) → raw/{prefix}/companies/diff/from=…/to=…/{sha256}.json
@@ -115,8 +115,9 @@ En CLI : `gcloud logging read 'resource.type="cloud_run_job" AND jsonPayload.eve
 uv sync --locked
 uv run rne-ingest --help
 
-# Essai local dans un namespace personnel (ADC + identifiants API dans un .env privé)
-uv run --env-file .env rne-ingest --prefix sandbox/<moi>/inpi/rne \
+# Essai local dans un namespace jetable, pour ne pas avancer le checkpoint de production
+# (ADC + identifiants API dans un .env privé). Supprimer essai/ après usage.
+uv run --env-file .env rne-ingest --prefix essai/inpi/rne \
   sync --start 2026-03-01T00:00:00Z --until 2026-03-01T06:00:00Z --max-requests 50
 
 uv run pytest -q && uv run ruff check . && uv run ruff format --check .

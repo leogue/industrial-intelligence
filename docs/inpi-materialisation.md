@@ -16,17 +16,18 @@ Le catalogue ZIP indique **177 360 918 612 octets décompressés** pour le stock
 raw/{prefix}/stocks/.../stock.zip                    # original inchangé
 control/{prefix}/stocks/{revision}.json              # reçu d'archive validé
 
-bronze/{prefix}/companies/
-  snapshot_id={sha256_archive}/schema_version=1/
-    parts/part-000001/{attempt_id}.parquet
-    rejects/part-000001/{attempt_id}.jsonl.gz
-    manifests/part-000001.json                       # commit du fichier interne
-    ...
-    manifest.json                                   # seulement après TOUT le stock
+bronze/{prefix}/companies/stock/{nom_du_zip}/        # ex. stock_RNE_formalites_NIVEAU1_20260304_1400
+  part-000001.parquet
+  ...
+  _rejects/part-000001.jsonl.gz
+  _manifests/part-000001.json                       # commit du fichier interne
+  _manifest.json                                    # seulement après TOUT le stock
 
-control/{prefix}/materialize/{sha256_archive}/v1/
+control/{prefix}/materialize/{sha256_archive}/
   checkpoint.json                                   # progression de conversion
 ```
+
+Le sha256 de l'archive et la version de schéma ne sont plus dans le chemin : ils restent dans les manifestes et dans les colonnes de provenance. Le préfixe `_` fait ignorer manifestes et rejets par les lecteurs Parquet (DuckDB, Polars, pyarrow).
 
 Le checkpoint du différentiel `control/{prefix}/checkpoint.json` n'est **jamais** initialisé/modifié par cette commande. La date de couverture du stock reste à confirmer avant le rattrapage API. Ni les dates min/max observées dans un premier fichier, ni son nom ne constituent un watermark national garanti.
 
@@ -69,9 +70,9 @@ Les sorties restent privées et portent les indicateurs de diffusion. Leur exist
 
 Le manifeste d'un membre est écrit **après** fermeture/validation du Parquet et du fichier de rejets. Le checkpoint avance seulement ensuite, avec précondition de génération. Si cette dernière écriture échoue, une relance valide et réutilise le manifeste existant au lieu de réécrire la part.
 
-Les tentatives ont des chemins uniques pour ne pas écraser des objets finalisés lors d'un crash. Des artefacts orphelins peuvent subsister si un processus meurt entre upload et manifeste. Ils ne sont pas automatiquement supprimés.
+Chaque part a un nom fixe et le job ne peut que créer des objets dans `bronze/` (pas de remplacement). Si un processus meurt entre l'upload d'une part et l'écriture de son manifeste, la relance échoue avec `Output object already exists` : vérifier qu'aucune exécution n'est active, supprimer à la main `part-NNNNNN.parquet` et `_rejects/part-NNNNNN.jsonl.gz` du membre sans manifeste, puis relancer. Cette fenêtre est très courte et ne s'est pas produite sur le stock national.
 
-**Lire exclusivement les artefacts référencés par les manifestes, jamais un glob de tous les Parquet présents dans `parts/`** : un glob pourrait inclure des tentatives orphelines. Pour l'essai partiel, lire le manifeste `manifests/part-000001.json`, puis son champ `parquet`. Pour un snapshot complet, commencer par `manifest.json`, puis les manifestes de membre de sa liste `parts`. Avant publication du manifeste global, toutes les parts acquittées et leurs totaux sont revérifiés.
+Un snapshot est complet **seulement si `_manifest.json` existe**. Il se lit alors directement, par exemple avec DuckDB : `read_parquet('gs://…/companies/stock/{nom_du_zip}/*.parquet')`. Avant publication du manifeste global, toutes les parts acquittées et leurs totaux sont revérifiés.
 
 Une relance avec `--max-members 1` traite le **prochain** membre non acquitté. Une relance après complétion ne réécrit pas les données. Un changement de schéma/règles de normalisation incompatible nécessite une nouvelle version de schéma, pas l'écrasement d'un snapshot existant.
 
@@ -83,10 +84,9 @@ Le verrou est partagé avec l'ingestion dans ce namespace. Un arrêt brutal peut
 uv sync --locked
 uv run rne-ingest materialize --help
 
-# Essai borné, source existante du sandbox Leo. ADC, pas de .env nécessaire.
+# Essai borné sur le stock archivé (préfixe par défaut inpi/rne). ADC, pas de .env nécessaire.
 # Une nouvelle exécution passe au membre suivant si le premier est déjà acquitté.
-uv run rne-ingest --bucket industrial-intelligence-dev-data \
-  --prefix sandbox/leo/inpi/rne materialize \
+uv run rne-ingest --bucket industrial-intelligence-dev-data materialize \
   --stock-revision b47860c7c6a645bc1d54e878d2c4d2b5ec67b2d4530da9b1bd5f2cd2c8c9fbde \
   --max-members 1
 ```

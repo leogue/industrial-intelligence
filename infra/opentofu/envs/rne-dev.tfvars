@@ -5,7 +5,7 @@ enable_rne_prerequisites = true
 enable_rne_ingestion     = true
 rne_schedule_enabled     = true
 rne_region               = "europe-west9"
-rne_prefix               = "sandbox/leo/inpi/rne"
+rne_prefix               = "inpi/rne"
 rne_image                = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:b65d416cfb6861a8954023c67944442e483f6e5ddc6e7c111af208d037eeb068"
 
 rne_stock_file = "stock_RNE_formalites_NIVEAU1_20260304_1400.zip"
@@ -20,6 +20,7 @@ rne_schedule = "0 */6 * * *"
 
 # Worker ZIP GCS -> Parquet, sans secret INPI, exécutions manuelles.
 # Le défaut du job reste borné à un membre ; le lancement national utilise des overrides.
+# Image de la branche refactor/rne-chemins-stock (chemins bronze/…/companies/stock/{nom_du_zip}/).
 enable_rne_materialization = true
-rne_materialize_image      = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:b65d416cfb6861a8954023c67944442e483f6e5ddc6e7c111af208d037eeb068"
+rne_materialize_image      = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion@sha256:1aa564a0656c1ea82dabf568ba0173e19f4ed4ac77df349bef9697fe037f963e"
 rne_stock_revision         = "b47860c7c6a645bc1d54e878d2c4d2b5ec67b2d4530da9b1bd5f2cd2c8c9fbde"
