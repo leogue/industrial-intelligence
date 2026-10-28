@@ -47,7 +47,8 @@ def validate_prefix(prefix: str) -> str:
     return prefix
 
 
-def company_siren(company: object) -> str:
+def validate_company(company: object) -> tuple[str, datetime]:
+    """Return the validated SIREN and technical update timestamp shared by raw/Bronze."""
     if not isinstance(company, dict):
         raise IngestionError("Expected a company object")
     formality = company.get("formality", {})
@@ -58,5 +59,4 @@ def company_siren(company: object) -> str:
         raise IngestionError("Missing or invalid company SIREN")
     if formality.get("siren", siren) != siren:
         raise IngestionError("Conflicting SIREN values")
-    parse_time(company.get("updatedAt"))
-    return siren
+    return siren, parse_time(company.get("updatedAt"))

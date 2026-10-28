@@ -42,24 +42,50 @@ variable "rne_stock_file" {
   default     = ""
 }
 
-variable "rne_initial_from" {
-  description = "Borne différentielle initiale choisie après vérification de la couverture du stock (ISO 8601 avec fuseau). Jamais déduite du nom du ZIP."
+variable "rne_sync_start" {
+  description = "Borne supposée du stock RNE (ISO 8601 UTC) : le différentiel collecte à partir de cette date. Ne pas la changer une fois le checkpoint créé."
   type        = string
   default     = ""
   validation {
-    condition     = var.rne_initial_from == "" || can(formatdate("YYYY-MM-DD", var.rne_initial_from))
-    error_message = "Utiliser une date RFC 3339 avec fuseau, ou laisser vide avant la préparation du bootstrap."
+    condition     = var.rne_sync_start == "" || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", var.rne_sync_start))
+    error_message = "Format attendu : AAAA-MM-JJTHH:MM:SSZ (UTC)."
   }
 }
 
 variable "rne_schedule_enabled" {
-  description = "Activer uniquement après bootstrap réussi, rattrapage manuel et contrôle de la couverture."
+  description = "Activer le job quotidien sync après publication et essai de l'image."
   type        = bool
   default     = false
 }
 
+variable "enable_rne_materialization" {
+  description = "Créer le job manuel ZIP vers Parquet (sans secret INPI). Désactivé par défaut."
+  type        = bool
+  default     = false
+}
+
+variable "rne_materialize_image" {
+  description = "Image contenant la commande materialize, épinglée par digest ; indépendante du rollout des jobs d'ingestion."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.rne_materialize_image == "" || can(regex("^[^[:space:]]+@sha256:[a-f0-9]{64}$", var.rne_materialize_image))
+    error_message = "Utiliser une image immuable par digest."
+  }
+}
+
+variable "rne_stock_revision" {
+  description = "Empreinte distante du reçu de stock (64 caractères hexadécimaux), pas son SHA-256 de contenu."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.rne_stock_revision == "" || can(regex("^[a-f0-9]{64}$", var.rne_stock_revision))
+    error_message = "Utiliser la révision du reçu de stock validé."
+  }
+}
+
 variable "rne_schedule" {
-  description = "Cron quotidien par défaut à 05:00 UTC ; refresh garde un jour de marge de publication."
+  description = "Cron du job sync (UTC). Une exécution déjà à jour se termine sans appel API ; sync garde un jour de marge de publication."
   type        = string
   default     = "0 5 * * *"
 }

@@ -1,285 +1,142 @@
-# Ingestion RNE : stock FTP et différentiel quotidien
+# Ingestion RNE — stock FTP + différentiel quotidien
 
-## 1. Périmètre et état réel
+**État : code local, pas encore déployé.** Le job Cloud Run actuel tourne encore avec l'ancienne image (rejeu depuis 2023, voir [le journal](deploiement-rne-dev.md)). La [mise en service](#mise-en-service-à-faire-avec-accord) se fait en une étape, décrite plus bas.
 
-Implémentation Python 3.13, une image, deux commandes :
+## Le principe
 
-- **`bootstrap`** : copie un ZIP explicite de **formalités entreprises** du FTP vers GCS, en flux ; calcule sa taille et son SHA-256, écrit un manifeste, puis initialise un checkpoint.
-- **`refresh`** : récupère les réponses complètes de `/companies/diff`, avec pagination, provenance et reprise ; stocke les octets JSON reçus, sans les transformer.
+```text
+FTP INPI : stock_RNE_formalites_NIVEAU1_20260304_1400.zip  (photo du registre ≈ mars 2026)
+   │ bootstrap     → raw/{prefix}/stocks/.../*.zip                      (fait, 15 Go)
+   │ materialize   → bronze/{prefix}/companies/snapshot_id=.../*.parquet (fait, 27,3 M lignes)
+   ▼
+API /companies/diff : fiches modifiées depuis le 1er mars 2026
+   │ sync (chaque jour) → raw/{prefix}/companies/diff/from=…/to=…/{sha256}.json
+   │                    → bronze/{prefix}/companies/diff/from=…/to=…/companies.parquet
+   ▼
+État courant d'une entreprise = sa ligne la plus récente, stock ∪ diff (ETL Silver, à écrire)
+```
 
-**Ce n'est pas encore l'ETL** : le ZIP n'est ni décompressé ni converti en fiches par entreprise. Les pages API sont des tableaux `[{"company": {...}}]`, pas des patches à appliquer au ZIP. Construire l'état courant par SIREN et les tables Silver sera une étape séparée. Aucun PDF, bilan saisi, SFTP documentaire, OCR ou graphe n'est ingéré par cette version.
+- Le **stock** fournit toutes les entreprises et leur bloc `historique[]` (les événements depuis 2023 y sont déjà).
+- Le **différentiel** renvoie la **fiche actuelle** des entreprises modifiées dans une fenêtre. Il ne donne pas l'état passé. Rejouer le diff depuis 2023 reviendrait à retélécharger tout le registre via l'API (le RNE a été entièrement migré début 2023) : c'est inutile.
+- Il reste donc **un seul trou à combler** : de la date du stock jusqu'à aujourd'hui. Ensuite, il suffit de collecter chaque jour la veille.
 
-Le choix de conserver des pages API, plutôt qu'un objet par SIREN/version, limite le nombre de petites écritures GCS et facilite la reprise. Tous les champs restent dans le brut. Une empreinte de page ne remplace pas une comparaison métier des entreprises.
+La borne `2026-03-01T00:00:00Z` est une **hypothèse d'équipe**, pas une couverture certifiée par l'INPI. 5 469 des 5 470 fichiers du ZIP sont datés du 5 mars 2026, et on prend quelques jours de marge en amont ([détails](inpi.md#recherche-publique-complémentaire-et-datation-interne-du-zip)).
 
-**Rien n'est présumé déployé.** OpenTofu définit des ressources opt-in ; les valeurs par défaut ne créent aucun nouveau service RNE. Aucun téléchargement national ou test réel INPI/GCS n'est nécessaire pour exécuter les tests unitaires. Voir aussi [l'exploration de la source](inpi.md).
-
-## 2. Organisation du code
+## Le code
 
 ```text
 src/industrial_intelligence/ingestion/rne/
-├── cli.py       # commandes, paramètres et variables d'environnement
-├── api.py       # login, GET, backoff, limites, pagination et count
-├── ftp.py       # SIZE/MDTM et transfert borné en mémoire
-├── storage.py   # GCS, créations immuables et préconditions de génération
-├── pipeline.py  # bootstrap, fenêtres, manifestes, checkpoints et verrou
-└── common.py    # dates UTC, validation minimale et erreurs sans secrets
+├── cli.py          # 3 commandes : bootstrap, materialize, sync
+├── sources.py      # client API RNE (login, retries, 429) et client FTP du stock
+├── storage.py      # GCS via ADC : objets immuables, checkpoint en compare-and-swap
+├── companies.py    # schéma Parquet Bronze commun au stock et au diff
+├── bootstrap.py    # FTP → GCS (ZIP original + reçu)
+├── materialize.py  # ZIP GCS → Parquet Bronze, reprise par fichier
+├── diff.py         # sync : rattrapage puis quotidien, un seul checkpoint
+├── log.py          # logs JSON structurés pour Cloud Logging
+└── common.py       # dates UTC, validation SIREN, erreurs sans secrets
 ```
 
-Dépendances d'exécution : `httpx`, `google-cloud-storage`. Tests : `pytest` ; qualité : Ruff. Les versions résolues sont dans `uv.lock`. Pas de nouvelle infrastructure locale ni de service réseau par connecteur.
+### `sync` en une boucle (`diff.py`)
 
-## 3. Stockage
+Checkpoint `control/{prefix}/diff/checkpoint.json` :
 
-Exemple avec `RNE_PREFIX=inpi/rne` :
+```json
+{"schema_version": 1, "start": "2026-03-01T00:00:00.000000Z",
+ "completed_until": "2026-03-04T18:00:00.000000Z",
+ "window": {"from": "…", "to": "…", "expected": 7421, "records": 3100, "cursor": "…", "pages": [...]}}
+```
+
+1. **Ouvrir une fenêtre** `[completed_until, to]` : `/companies/diff/count` doit être exact (≤ 10 000). Sinon on coupe la fenêtre en deux. On démarre avec 6 h ; après chaque succès, la fenêtre double, jusqu'à 1 jour au maximum.
+2. **Paginer** `/companies/diff` : chaque page JSON brute est écrite dans `raw/`, sous un nom égal à son SHA-256 (jamais écrasée). Le curseur est enregistré dans le checkpoint après chaque page.
+3. **Clore** la fenêtre sur la page vide : le total doit être égal au count. Si c'est le cas, on écrit **un Parquet par fenêtre** et `completed_until` avance. Sinon, la fenêtre est remise à zéro et l'exécution échoue, de façon visible ; elle sera recollectée à l'exécution suivante.
+
+Le premier lancement crée le checkpoint à `--start`. Les lancements suivants reprennent là où le précédent s'est arrêté (un `--start` différent est refusé). Quand le budget d'appels ou de temps est atteint, ou en cas de quota INPI (HTTP 429), l'exécution se termine **avec succès** et `status: "partial"` : la suivante continue. Une fois le retard rattrapé, chaque exécution ne collecte plus que la veille (`--lag-days 1` : jusqu'à minuit UTC moins un jour).
+
+Pas de verrou ni de catalogue : le checkpoint est écrit en compare-and-swap (deux exécutions concurrentes → la seconde échoue sans rien écraser). Les pages brutes sont adressées par contenu et le Parquet a un chemin déterministe, donc rejouer après un crash ne crée pas de doublon.
+
+### Sortie
+
+Le schéma Bronze du diff est le même que celui du stock (`companies.COMPANY_SCHEMA`) : `siren`, quelques colonnes typées, le JSON complet exact dans `company_json` (décimaux préservés), `deleted` (tombstones) et la provenance par ligne (`source_uri`, `source_sha256`, `source_generation`, `source_retrieved_at`, `source_kind=diff`).
+
+Une même entreprise peut apparaître dans plusieurs fenêtres : l'API inclut en pratique la borne basse, et une entreprise peut aussi être modifiée plusieurs fois. **La déduplication relève de l'ETL Silver**, pas de l'ingestion. Exemple de lecture de l'état courant (non implémenté, à valider) : garder par `siren` la ligne de plus grand `source_updated_at`, puis `source_retrieved_at`, sur stock ∪ diff, et marquer les `deleted = true`.
+
+## Durée et coût estimés
+
+Mesures sur le job actuel : **un jour de changements ≈ 1 650 appels API**, débit **≈ 1 900 appels/h** (exécution du 28/10/2026 : 2 154 appels en 68 min). Aucun HTTP 429 sur les exécutions du 24 au 28/10, mais aucune n'a dépassé ~2 600 appels/jour : **le quota réel du diff est inconnu**.
+
+| | Estimation |
+|---|---|
+| Trou 01/03/2026 → fin octobre 2026 | ~240 jours ≈ **400 000 appels** ≈ 210 h de job |
+| Une exécution (`--max-requests 10000`, `--max-seconds 20000` ≈ 5,5 h) | ~10 000 appels ≈ 6 jours de données |
+| Scheduler **toutes les 6 h** (`0 */6 * * *`), sans quota bloquant | ~40 000 appels/jour → **≈ 12 jours** |
+| Si un quota de 10 000 appels/jour s'applique (annoncé pour actes/comptes) | ≈ 7–8 semaines |
+| Ensuite | ~1 650 appels/jour ; les 3 autres exécutions du jour se terminent sans appel |
+
+Les exécutions s'enchaînent sans se chevaucher : budget souple de 5,5 h, timeout de 6 h. En cas de chevauchement accidentel, le checkpoint en compare-and-swap fait échouer la seconde sans rien écraser. Si l'INPI renvoie des 429, l'exécution s'arrête proprement en `partial` avec la raison « quota » dans le log. Le rattrapage ralentit alors tout seul, et pour accélérer il faudrait demander une hausse de quota à l'INPI. Côté GCP, le coût reste de quelques dollars au total (calcul ~0,07 $/h, environ 2 écritures GCS par page, ~200 Go de JSON brut estimés au bout du rattrapage). Voir [les mesures de coûts](couts-rne-dev.md).
+
+## Suivi : logs structurés Cloud Logging
+
+Chaque ligne écrite sur stdout est un objet JSON (`log.py`, sans dépendance). Cloud Run Jobs l'envoie dans Cloud Logging sous forme de `jsonPayload`. Les champs `severity`, `message`, `logging.googleapis.com/labels` (`app=rne-ingest`, `command=sync|bootstrap|materialize`) et `logging.googleapis.com/sourceLocation` sont reconnus. Les logs **ne contiennent jamais** de secrets, de token, de payload d'entreprise ni de SIREN : seulement des compteurs techniques.
+
+| `jsonPayload.event` | Sévérité | Contenu |
+|---|---|---|
+| `command_started` | INFO | bucket, prefix |
+| `sync_started` | INFO | start, completed_until, target, resumes_window |
+| `window_completed` | INFO | window_from, window_to, records, pages, api_requests |
+| `window_restarted` | WARNING | count ≠ fiches paginées : fenêtre recollectée au prochain run |
+| `api_retry` | WARNING | path, status (429, 5xx ou erreur réseau), attempt, delay_seconds |
+| `api_token_renewed` | INFO | JWT expiré, renouvelé une fois |
+| `command_completed` | INFO / WARNING si `partial` | résumé : status, reason, completed_until, **days_behind**, records, api_requests |
+| `command_paused` / `command_failed` | WARNING / ERROR | reason, ou error_type seul pour une exception inconnue |
+| `stock_transfer_*`, `stock_member_materialized` | INFO | progression du bootstrap et de la conversion |
+
+Requêtes Logs Explorer (projet `industrial-intelligence-dev`) :
 
 ```text
-raw/inpi/rne/
-├── stocks/{remote_revision}/{run_id}/
-│   ├── stock_RNE_formalites_....zip
-│   └── stock_RNE_formalites_....zip.manifest.json
-└── companies/from={datetime_utc}/to={datetime_utc}/
-    ├── {sha256_response}.json
-    └── manifest-{run_id}.json
+# Résumé de chaque exécution : avancement du rattrapage (days_behind)
+resource.type="cloud_run_job" resource.labels.job_name="rne-refresh"
+jsonPayload.event="command_completed"
 
-control/inpi/rne/
-├── checkpoint.json
-├── lock.json                         # présent seulement pendant une exécution
-└── stocks/{remote_revision}.json      # reçu d'archive réutilisable après incident
+# Tout ce qui mérite attention
+resource.type="cloud_run_job" labels.app="rne-ingest" severity>=WARNING
+
+# Quota / erreurs INPI
+resource.type="cloud_run_job" jsonPayload.event="api_retry"
 ```
 
-- `remote_revision` = empreinte du **nom + taille + MDTM**, pas hash de contenu ni date métier.
-- SHA-256 du ZIP calculé sur tous les octets transférés. La signature ZIP et les tailles sont vérifiées ; **pas de validation intégrale des CRC internes ni du schéma des enregistrements du stock** à cette étape.
-- GCS reçoit le ZIP en upload résumable, avec un tampon de **8 MiB** ; les blocs FTP font 1 MiB. Aucun fichier de 15 Go sur le disque/mémoire du conteneur.
-- Le producteur vérifie le succès FTP, la taille, la signature et la stabilité SIZE/MDTM **avant de finaliser** l'upload GCS. Une erreur dans le contexte du writer annule l'upload résumable. Aucun reçu ni checkpoint ne valide un transfert partiel.
-- Originaux créés avec `if_generation_match=0`, jamais remplacés. Les réponses API identiques d'une même fenêtre retrouvent le même nom par hash.
-- Un objet dont l'upload est terminé mais qui n'a pas de manifeste/reçu après un crash reste **orphelin, pas une ingestion validée**. Pas de nettoyage automatique destructif.
-- Les manifestes des fenêtres terminées contiennent les URI/hashes/tailles/dates de récupération et curseurs de toutes les pages, y compris la page vide finale.
-- Pendant une fenêtre incomplète, ces références sont dans le checkpoint ; les consommateurs doivent utiliser les manifestes terminés, pas supposer que tout objet visible est une fenêtre complète.
+En CLI : `gcloud logging read 'resource.type="cloud_run_job" AND jsonPayload.event="command_completed"' --freshness=2d --format='value(timestamp,jsonPayload.message)'`.
 
-Pour les essais, choisir un préfixe personnel, par exemple `sandbox/alice/inpi/rne`, qui produit `raw/sandbox/alice/inpi/rne/` et `control/sandbox/alice/inpi/rne/`. Ne pas utiliser le checkpoint de l'équipe pour un test.
+**Non créé (proposition) :** une alerte Cloud Monitoring sur `severity>=ERROR` pour `rne-refresh`, envoyée par email. Elle demande un canal de notification et une ressource OpenTofu, à valider séparément.
 
-## 4. Installer et vérifier sans réseau métier
+## Commandes
 
 ```sh
 uv sync --locked
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
 uv run rne-ingest --help
-uv run rne-ingest bootstrap --help
-uv run rne-ingest refresh --help
+
+# Essai local dans un namespace personnel (ADC + identifiants API dans un .env privé)
+uv run --env-file .env rne-ingest --prefix sandbox/<moi>/inpi/rne \
+  sync --start 2026-03-01T00:00:00Z --until 2026-03-01T06:00:00Z --max-requests 50
+
+uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 ```
 
-Les tests bloquent les connexions socket et utilisent un stockage en mémoire, des mocks GCS/FTP et `httpx.MockTransport`. Ils couvrent notamment les erreurs, les tombstones enveloppés comme entreprises lorsqu'ils respectent le contrat minimal, les curseurs, la reprise, les générations, les bornes et la stabilité du stock. Ils ne prouvent pas les performances nationales ni les droits réels GCP.
+Variables : `RNE_BUCKET`, `RNE_PREFIX`, `INPI_USERNAME`/`INPI_PASSWORD` (API, compte personnel), `INPI_FTP_USERNAME`/`INPI_FTP_PASSWORD` (FTP, compte technique distinct), `RNE_STOCK_FILE`. Voir `.env.example`. Aucune clé de service account : GCS passe par ADC.
 
-## 5. Configuration locale et exécution manuelle
+## Mise en service (à faire, avec accord)
 
-Les secrets sont lus dans l'environnement. `.env` est ignoré par Git ; chargement **explicite** via `uv run --env-file .env`. Copier `.env.example` seulement si aucun `.env` privé n'existe déjà, puis `chmod 600 .env`. Ne pas écraser un fichier privé existant.
+Le nouveau `sync` écrit sous de **nouveaux chemins** (`control/…/diff/`, `raw|bronze/…/companies/diff/`). Les anciens checkpoints, pages et le catalogue Silver restent intacts : il n'y a rien à migrer ni à effacer.
 
-| Variable | Usage |
-|---|---|
-| `RNE_BUCKET` | Nom du bucket, sans `gs://` ; ADC pour l'accès GCS |
-| `RNE_PREFIX` | Namespace, défaut `inpi/rne` ; préférer un namespace personnel en développement |
-| `RNE_STOCK_FILE` | Nom exact du ZIP de formalités ; aucun choix automatique de « dernier stock » |
-| `RNE_INITIAL_FROM` | Borne de rattrapage explicite avec fuseau ; aucune date implicite |
-| `INPI_FTP_HOST`, `INPI_FTP_PORT` | Défauts `www.inpi.net`, `21` |
-| `INPI_FTP_USERNAME`, `INPI_FTP_PASSWORD` | Couple technique FTP, pas les identifiants personnels |
-| `INPI_USERNAME`, `INPI_PASSWORD` | Compte personnel pour l'API RNE |
-| `INPI_API_BASE_URL` | Seule l'origine de production documentée est autorisée dans cette version |
+1. Construire et publier l'image (`docker build --platform linux/amd64 -f Dockerfile.rne …`), puis mettre son digest dans `envs/rne-dev.tfvars` (`rne_image`, `rne_materialize_image`).
+2. `tofu plan -var-file=envs/dev.tfvars -var-file=envs/rne-dev.tfvars` puis relire le plan. On y attend : la mise à jour des images et des arguments de `rne-refresh` (`sync --start 2026-03-01T00:00:00Z --max-requests 10000 --max-seconds 20000`), le cron du Scheduler passé à `0 */6 * * *`, la suppression des 4 droits `silver/` devenus inutiles et la levée de la précondition `sync.json`.
+3. Appliquer, puis lancer une exécution manuelle et suivre ses logs (`window_completed`, puis le JSON final avec `completed_until` et `days_behind`).
+4. Le Scheduler (toutes les 6 h) poursuit ensuite seul le rattrapage, puis le quotidien. Surveiller les premiers jours : `days_behind` doit baisser d'environ 20 par jour. Si `reason` mentionne « quota », le débit est limité par l'INPI.
 
-Les variables SFTP de l'exemple ne sont pas utilisées par ce connecteur.
+Les données collectées par l'ancien job (rejeu 2023 et récent du 22 au 27/10) restent disponibles, mais le nouveau flux ne les utilise pas. Le récent sera recollecté quand le rattrapage atteindra ces dates (quelques milliers d'appels).
 
-### Bootstrap — action de masse à approuver séparément
+## Limites connues
 
-La date du nom du stock et MDTM **ne suffisent pas** à déterminer la date de couverture. Il faut choisir une borne suffisamment ancienne, vérifier la disponibilité des deltas et documenter cette décision avant de prétendre à l'exhaustivité. Le code impose une borne explicite, mais **ne peut pas certifier sa validité métier**.
-
-Après validation du bucket, du préfixe, du volume et du budget, renseigner `RNE_STOCK_FILE` et `RNE_INITIAL_FROM`, puis :
-
-```sh
-# ATTENTION : télécharge le stock sélectionné et écrit dans GCS.
-uv run --env-file .env rne-ingest \
-  --bucket industrial-intelligence-dev-data \
-  --prefix sandbox/alice/inpi/rne \
-  bootstrap --allow-large-download
-```
-
-- Sans `--allow-large-download`, un stock de plus de **100 MiB** est refusé.
-- Limite absolue par défaut : **20 GiB**, ajustable avec `--max-stock-bytes`.
-- Un checkpoint déjà initialisé n'est jamais réinitialisé par bootstrap.
-- Après un crash entre le reçu du ZIP et l'initialisation du checkpoint, le reçu permet de réutiliser l'archive si taille/génération GCS et hôte FTP correspondent.
-- Un nouveau bootstrap/snapshot doit utiliser un **nouveau namespace**, avec une procédure de bascule explicite ; ne pas effacer le checkpoint courant pour « rafraîchir » le stock.
-
-### Différentiel
-
-```sh
-# Nécessite un bootstrap terminé dans le même namespace.
-uv run --env-file .env rne-ingest \
-  --bucket industrial-intelligence-dev-data \
-  --prefix sandbox/alice/inpi/rne \
-  refresh
-```
-
-Valeurs par défaut :
-
-- horizon = **minuit UTC du jour courant moins un jour** (`--lag-days 1`) ; on ne collecte pas une journée encore en cours ;
-- fenêtres de **6 h**, réduites de moitié si `/companies/diff/count` annonce >10 000 résultats ; arrêt si une fenêtre d'une seconde est encore trop grande ;
-- recouvrement de **24 h** depuis le watermark précédent, sans descendre avant la borne initiale ;
-- **10 entreprises/page**, au plus **4 500 pages** et **5 000 requêtes HTTP** par exécution (login et retries compris) ;
-- réponse limitée à **64 MiB** ; si une page dépasse cette limite, arrêt sans checkpoint de page, puis relance explicite avec `--restart-window --page-size 5` pour rejouer la fenêtre incomplète depuis son début ;
-- espacement minimal de 0,25 s par requête, cinq tentatives sur erreurs transitoires, backoff et `Retry-After` jusqu'à 300 s. Au-delà, pause sans réessayer trop tôt ;
-- une expiration `401` autorise une reconnexion ; `403`, redirection, JSON invalide ou schéma inattendu ne sont pas réessayés aveuglément.
-
-Une fenêtre n'est terminée qu'après une **page vide explicite**. Un curseur manquant/répété sur une page non vide ou un `updatedAt` hors fenêtre fait échouer le job : aucun résultat n'est silencieusement ignoré. Un SIREN reste une chaîne de neuf chiffres, avec contrôles de cohérence entre racine et formalité.
-
-Le watermark n'avance qu'après les écritures réussies. Une interruption reprend la **fenêtre, la taille de page et le curseur enregistrés**, pas une nouvelle fenêtre recalculée. L'option manuelle `--restart-window` permet de réinitialiser uniquement la fenêtre incomplète pour la rejouer (curseur invalidé ou changement de taille de page), sans avancer le watermark ni effacer les originaux. Un batch interrompu conserve son horizon ; l'exécution suivante le termine avant d'établir un horizon plus récent. Le recouvrement est rejoué une seule fois par batch, pas à chaque page. Il réduit certains risques de retard sans garantir la capture des corrections très tardives.
-
-L'API doit continuer d'honorer ses fenêtres et curseurs pour que la reprise soit complète. Pas de snapshot transactionnel garanti côté INPI : une réconciliation périodique reste à concevoir.
-
-Codes de sortie : **0** terminé/à jour ; **2** budget/pause avec progression conservée ; **1** erreur. Une pause n'est pas un succès silencieux. Aucun compteur ne coordonne les quotas entre plusieurs namespaces ou l'IHM : les budgets par exécution ne garantissent pas de rester sous le quota quotidien partagé.
-
-## 6. Construire l'image
-
-`Dockerfile.rne` contient une seule image d'exécution Python 3.13, non-root, sans outils de développement. Les dépendances sont installées depuis `uv.lock`. Le contexte Docker est une **allowlist** : `.env`, credentials GCP, `.git`, états/plans OpenTofu et tests n'y entrent pas.
-
-```sh
-# Nécessite un moteur Docker disponible ; aucune infrastructure locale à déployer.
-docker buildx build --platform linux/amd64 --load -f Dockerfile.rne \
-  -t industrial-intelligence-rne:dev .
-docker run --rm --platform linux/amd64 --network none --read-only \
-  industrial-intelligence-rne:dev --help
-```
-
-Les bases Python/uv sont versionnées par tag dans le Dockerfile ; reconstruire à une autre date peut changer la base. Le déploiement exige ensuite le **digest de l'image produite**, pour ne pas changer de binaire lors d'une nouvelle exécution. Le même digest est utilisé par les deux jobs.
-
-## 7. OpenTofu : ressources préparées, non automatiquement déployées
-
-Fichiers : `infra/opentofu/rne.tf`, `rne_variables.tf`. Le bucket existant n'est ni renommé ni déplacé. Région proposée : **`europe-west9`**, distincte de la localisation multi-région `EU` du bucket.
-
-### Ressources définies
-
-- Dépôt Artifact Registry Docker `rne`.
-- Quatre **conteneurs de secrets vides** : identifiants/mots de passe API et FTP. **Aucune valeur secrète dans OpenTofu ou l'état.**
-- Deux service accounts d'exécution, chacun accédant seulement à ses deux secrets.
-- Accès GCS conditionnels par préfixe : création/lecture sur `raw/PREFIX/`, manipulation des checkpoints/verrous sur `control/PREFIX/`. Aucun droit de suppression/remplacement du brut ; pas de droit de lister tout le bucket.
-- Deux Cloud Run Jobs, **1 tâche, parallélisme 1, 1 vCPU / 1 GiB**, sans retries automatiques :
-  - `rne-bootstrap` : `bootstrap --allow-large-download`, timeout **24 h**, exécution manuelle ;
-  - `rne-refresh` : `refresh`, timeout **6 h**.
-- Un compte Scheduler avec `roles/run.invoker` sur **le seul job refresh**.
-- Un Scheduler **quotidien à 05:00 UTC**, POST OAuth sur l'API Cloud Run `:run`, **en pause par défaut**.
-- Activation explicite des API nécessaires lorsque les flags sont activés ; rien n'est activé dans les valeurs par défaut.
-
-Les secrets sont protégés par `prevent_destroy` et les jobs par `deletion_protection`. Désactiver les flags après déploiement n'est pas une procédure de nettoyage ; vérifier tout plan et les protections avant une destruction approuvée.
-
-### Déploiement en étapes — après approbation du plan et du budget
-
-Toutes les commandes ci-dessous sont des **actions manuelles proposées, pas des actions déjà effectuées**. Ne pas lancer OpenTofu simultanément à plusieurs, l'état reste local.
-
-**A. Préparer le registre et les secrets vides** : dans les variables d'environnement OpenTofu, définir :
-
-```hcl
-enable_rne_prerequisites = true
-enable_rne_ingestion     = false
-rne_schedule_enabled    = false
-```
-
-Puis `tofu init`, `tofu fmt -check`, `tofu validate`, `tofu plan -var-file=envs/dev.tfvars -out=dev.tfplan`. Faire approuver ce plan avant tout `tofu apply dev.tfplan`.
-
-**B. Publier l'image et ajouter les versions de secrets**, avant de créer les jobs :
-
-```sh
-# Depuis la racine ; nécessite les droits de publication, sans clé de SA.
-gcloud auth configure-docker europe-west9-docker.pkg.dev
-IMAGE=europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/ingestion:dev
-docker build --platform linux/amd64 -f Dockerfile.rne -t "$IMAGE" .
-docker push "$IMAGE"
-gcloud artifacts docker images describe "$IMAGE" --format='value(image_summary.digest)'
-```
-
-Reporter le digest obtenu dans `rne_image`, avec le chemin sans tag : `.../rne/ingestion@sha256:...`. Les secrets se transmettent par stdin, pas dans les arguments shell. Exemple manuel, à exécuter seulement après création des conteneurs de secrets :
-
-```sh
-uv run --env-file .env python - <<'PY'
-import os
-import subprocess
-
-mapping = {
-    "inpi-rne-api-username": "INPI_USERNAME",
-    "inpi-rne-api-password": "INPI_PASSWORD",
-    "inpi-rne-ftp-username": "INPI_FTP_USERNAME",
-    "inpi-rne-ftp-password": "INPI_FTP_PASSWORD",
-}
-# Valider toutes les valeurs avant le premier appel.
-values = {secret: os.environ[variable] for secret, variable in mapping.items()}
-assert all(values.values()), "Missing secret value"
-for secret, value in values.items():
-    subprocess.run(
-        ["gcloud", "secrets", "versions", "add", secret,
-         "--project=industrial-intelligence-dev", "--data-file=-"],
-        input=value.encode(), stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE, check=True,
-    )
-print("Secret versions added; no values printed")
-PY
-```
-
-`gcloud` et les SDK ADC peuvent utiliser des identités différentes. Le compte qui publie/applique doit disposer des droits nécessaires, notamment pour attacher les service accounts ; aucun rôle Owner/Editor n'est ajouté par commodité. Les secrets sont référencés par version `latest` : une nouvelle version sera utilisée lors des exécutions suivantes, sans inscrire sa valeur dans le job.
-
-**C. Créer les jobs, Scheduler toujours en pause** :
-
-```hcl
-enable_rne_prerequisites = true
-enable_rne_ingestion     = true
-rne_image               = "<chemin image>@sha256:<digest réel de 64 caractères>"
-rne_stock_file          = "<nom ZIP confirmé>"
-rne_initial_from        = "<borne ISO 8601 vérifiée avec fuseau>"
-rne_schedule_enabled    = false
-```
-
-Refaire `plan`, revue puis application approuvée. Les jobs ne sont pas exécutés par `apply`.
-
-**D. Après autorisation du téléchargement**, lancer manuellement le bootstrap :
-
-```sh
-gcloud run jobs execute rne-bootstrap \
-  --project=industrial-intelligence-dev --region=europe-west9 --wait
-```
-
-Contrôler son succès, le manifeste et le checkpoint. Lancer ensuite `rne-refresh` de la même façon pour le rattrapage, en respectant le quota partagé. Une grande période de rattrapage peut demander plusieurs exécutions/jours. Ne pas activer la planification si le débit de traitement ne rattrape pas les nouveaux changements.
-
-**E. Activer ensuite seulement** `rne_schedule_enabled = true`, avec nouveau plan approuvé.
-
-## 8. Reprise et exploitation
-
-- Un seul verrou GCS commun au bootstrap et au refresh du namespace. La création et la suppression du verrou, ainsi que les écritures de checkpoint, utilisent des **préconditions de génération**.
-- Le verrou est supprimé sur une sortie Python normale, y compris les erreurs gérées. Un arrêt brutal/timeout peut le laisser présent. **Pas d'expiration automatique**, pour ne pas voler le verrou à un job encore actif.
-- En cas de verrou abandonné : vérifier les exécutions Cloud Run, confirmer qu'aucun worker n'est actif, sauvegarder/inspecter le checkpoint, puis faire approuver la suppression **du seul verrou**. Ne pas supprimer automatiquement le checkpoint ou les originaux.
-- Un transfert FTP interrompu n'a **pas de reprise par offset persistée** dans cette première version. L'upload GCS est résumable pendant le processus, mais un nouveau processus recommence le transfert si aucun reçu complet n'existe. Ni des octets partiels ni leur hash ne sont déclarés complets.
-- Les erreurs source/SDK ne journalisent ni réponse personnelle, ni mot de passe, ni JWT. Les logs de sortie contiennent un statut et des compteurs ; les exceptions SDK inconnues sont réduites au nom de leur classe.
-- Surveiller séparément le **succès des exécutions Cloud Run**, l'âge de `completed_until`, les pauses (code 2), les verrous anciens et les volumes. Une réponse HTTP positive à Scheduler signifie seulement « demande d'exécution acceptée ».
-- Les alertes/budgets et une réconciliation exhaustive ne sont **pas déployés par cette configuration** ; à définir avant exploitation régulière.
-
-## 9. Coûts, limites et étapes suivantes
-
-Hypothèse demandée : le FTP permet le téléchargement du stock sans quota bloquant. **Cette hypothèse n'est pas une garantie INPI.** Les quotas documentés API/SFTP et leurs différences sont détaillés dans `inpi.md`.
-
-Dimensionnement initial, pas un devis :
-
-- Stock entreprises observé : **15,14 Go compressés**, plus manifestes ; aucun stock de comptes de 4,30 Go ajouté ici.
-- Conserver plusieurs tentatives orphelines peut multiplier ce volume ; aucun cycle de rétention ne supprime automatiquement le brut.
-- Avec 20 000 changements/jour et 10 résultats/page : environ 2 000 pages nouvelles, auxquelles s'ajoutent recouvrement, pages vides et requêtes count. Taille des fiches très variable : volume réseau et stockage quotidien à mesurer.
-- Le job bootstrap est plafonné à **24 vCPU-heures et 24 GiB-heures** par exécution à ressources constantes ; le refresh à **6 vCPU-heures et 6 GiB-heures**. Ce sont des plafonds de durée configurée, pas des consommations attendues ou des prix.
-- Prévoir stockage GCS, opérations GCS de contrôle/écriture par page, image Artifact Registry, versions/appels Secret Manager, Scheduler et logs. Confirmer les prix régionaux, le budget et les alertes avant déploiement.
-
-Avant d'annoncer une ingestion nationale fiable : vérifier couverture/date du stock, contrat des bornes et curseurs, droits réels Secret Manager/GCS/Cloud Run, débit/mémoire sur un essai autorisé et absence de trous au passage stock → deltas. Les droits et protections n'ont pas été validés par une exécution cloud pendant les tests unitaires.
-
-Étapes suivantes : traitement incrémental des tableaux JSON du ZIP, normalisation/déduplication par SIREN avec provenance, gestion analytique des cessations/retraits et règles de non-diffusion, rapprochement SIRENE, puis bilans structurés. Les suppressions réglementaires exigent une procédure séparée et autorisée ; l'immuabilité technique du brut ne prime pas sur les obligations de retrait.
-
-## 10. Vérifications réalisées pour cette implémentation
-
-- `uv run pytest -q` : **58 tests réussis**, connexions réseau bloquées.
-- `uv run ruff check .` et `uv run ruff format --check .` : réussis.
-- `uv lock --check` et `uv build --wheel` : réussis ; package RNE présent dans le wheel, sans `.env` ni état OpenTofu.
-- Aides des deux commandes exécutées ; `tofu fmt -check` et `tofu validate` réussis, sans plan/apply.
-- Image locale **`industrial-intelligence-rne:dev` construite en `linux/amd64`** via Buildx depuis le Mac ARM, après démarrage de Docker. Aides générale/bootstrap/refresh et imports d'exécution testés sous émulation, réseau désactivé et système de fichiers en lecture seule.
-- Runtime vérifié : architecture x86_64, utilisateur `10001:10001`, extension native CRC32C fonctionnelle ; pas de pytest/Ruff, `.env`, `.git` ou répertoire `infra` dans `/app`. Les 58 tests hors réseau ont été réexécutés avec succès sur le poste hôte ; ils n'ont pas été exécutés dans le conteneur.
-- Image non publiée dans Artifact Registry ; aucune validation d'ingestion réelle ou de déploiement Cloud Run à revendiquer.
-- Aucun appel métier INPI/GCS, déploiement, changement IAM, ajout de valeur Secret Manager ou téléchargement national exécuté pendant cette implémentation.
+- Borne du stock supposée (voir plus haut) ; `stock_cutoff` non certifié.
+- Le count INPI est documenté comme un nombre de « liasses ». L'égalité count = fiches paginées a toujours été observée jusqu'ici. Si elle cessait d'être vraie, le job échouerait (de façon visible) au lieu de perdre des données en silence.
+- Pas de PDF, bilans, OCR ni bénéficiaires effectifs. Respecter diffusion INSEE/commerciale et retraits.

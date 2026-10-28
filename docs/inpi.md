@@ -324,9 +324,29 @@ Résultats :
 
 Le nom du stock formalités contient mars 2026, mais son `MDTM` indique octobre 2026. **Ni la date du nom ni la date du fichier ne constituent, à elles seules, un watermark métier garanti.**
 
-Le `readme.txt` évoque une ancienne relivraison de septembre 2025 corrigeant uniquement `stock_000001.json` à `stock_000010.json`. Il ne documente pas précisément les ZIP présents en octobre 2026. Cela démontre l'intérêt de gérer les corrections, pas une périodicité de publication.
+Le `readme.txt`, revérifié en lecture seule, évoque une ancienne relivraison du **stock de comptes annuels** de septembre 2025 corrigeant uniquement `stock_000001.json` à `stock_000010.json`. Il ne documente pas la couverture du ZIP de formalités. Cela démontre l'intérêt de gérer les corrections, pas une périodicité de publication.
 
 **Fréquence des stocks actuels : non établie.** Ne pas les qualifier de mensuels ou de snapshots exhaustifs à date connue sans confirmation INPI. Le catalogue éditorial contient aussi une référence historique au stock du 4 mai 2017 : elle ne suffit pas à décrire les archives actuelles.
+
+### Recherche publique complémentaire et datation interne du ZIP
+
+La recherche élargie n'a pas trouvé de contrat public de couverture pour le fichier `stock_RNE_formalites_NIVEAU1_20260304_1400.zip` :
+
+- [Documentation INPI formalités v5](https://www.inpi.fr/sites/default/files/2026-08/documentation%20technique%20API%20formalite%CC%81s_v5.0-AA.pdf), section D : usage du différentiel pour récupérer les entreprises créées/modifiées ; pas de borne de reprise associée à notre ZIP.
+- [Jeu RNE sur data.gouv.fr](https://www.data.gouv.fr/datasets/registre-national-des-entreprises) : ancienne description de novembre 2023, reprenant le stock RNCS de 2017. Ne pas la transposer à notre stock JSON 2026.
+- [Discussion TeamOpenData](https://teamopendata.org/t/quasi-opendata-ou-opendatafail-pour-le-rncs-diffuse-par-linpi/1603?page=3), juillet 2023 : mention d'un ancien lien public `https://www.inpi.fr/sites/default/files/rne/stock_rne.zip`. Contrôlé par HEAD, ce lien renvoie maintenant **404** ; aucune archive téléchargée.
+- [Un réutilisateur, filings.fr](https://filings.fr/mises-a-jour), annonce un stock RNE hebdomadaire et des diffs quotidiens. Il s'agit d'une déclaration tierce, sans preuve que le même fichier/service/compte soit concerné : ce n'est pas un SLA INPI ni la garantie de fraîcheur de notre archive.
+- [Ancien worker RNCS Etalab](https://github.com/etalab/rncs_worker_api_entreprise) : stock 2017 + flux CSV des greffes, architecture antérieure au RNE JSON. Ne pas reprendre ses dates pour initialiser notre pipeline.
+
+**Nouveau contrôle technique sur notre archive GCS :** lecture du répertoire central complet, épinglée à la génération d'origine, sans décompresser les entreprises. Sur les **5 470 membres**, **5 469 portent un timestamp ZIP du 5 mars 2026** ; seul **`stock_003753.json` porte le 19 octobre 2026**. Aucun commentaire ZIP explicatif. Les timestamps ZIP ne comportent pas de fuseau et ne sont pas des watermarks métier.
+
+Ces éléments sont **compatibles avec une production principale en mars et une modification ponctuelle en octobre**, sans prouver la nature de cette modification ni l'exhaustivité métier à une date précise. Ils ne permettent surtout pas de qualifier le fichier de snapshot national au 19 octobre sur la seule base du MDTM.
+
+**Hypothèse retenue par l'équipe, non encore appliquée au pipeline :** utiliser le **1er mars 2026 à 00:00 UTC** (`2026-03-01T00:00:00Z`) comme borne de travail du rattrapage, avec une marge en amont des dates du nom et des membres ZIP, plutôt que poursuivre le rejeu depuis 2023. C'est une **hypothèse de borne conservatrice par rapport aux dates techniques observées**, pas une couverture certifiée. Comparaisons ciblées stock/API et contrôles de créations/modifications peuvent détecter des trous, mais un échantillon ne prouve pas leur absence. Chiffrer ce rattrapage avant exécution ; conserver l'incertitude de couverture dans les métadonnées et ne pas avancer/réinitialiser artificiellement le checkpoint de reconstruction existant. Une alternative pour garantir une fraîcheur individuelle est de vérifier explicitement la fiche courante via l'API au moment de son utilisation, sous budget et avec la date réelle de récupération.
+
+Cette décision accepte une hypothèse de couverture ; elle ne certifie pas rétroactivement le stock et n'autorise pas à déclarer le rattrapage terminé. La transition devra conserver les données/progrès existants et distinguer explicitement le nouveau périmètre du replay intégral. L'objectif reste un état courant stock + différentiel, pas une reconstitution exhaustive de tous les états depuis 2023.
+
+Aucun mail envoyé, aucun job, budget ou checkpoint modifié pendant cette recherche ou l'enregistrement de cette décision. La proposition de contact est facultative et n'est pas une condition imposée à la poursuite du projet.
 
 ## 6. Mises à jour, dates, hash et anomalies constatées
 
@@ -343,6 +363,8 @@ Le `readme.txt` évoque une ancienne relivraison de septembre 2025 corrigeant un
 | `retrieved_at` | À produire par notre pipeline | Date UTC à laquelle nous avons effectivement récupéré la ressource |
 
 Sur l'historique `552100554?date=2025-01-01`, la réponse était HTTP 200 mais le `updatedAt` racine restait daté de 2026, comme la fiche courante. **Ne pas utiliser ce champ pour dater l'état historique demandé**, ni conclure qu'un HTTP 200 valide à lui seul la reconstitution juridique de cet état.
+
+**Qualification approfondie du 25 octobre 2026 :** 15 demandes historiques sur trois SIREN donnent 11 réponses réussies, dont six avec un contenu différent du courant malgré un `updatedAt` racine de 2026. Une troisième entreprise renvoie le même contenu et le même historique à toutes les dates demandées ; un état antérieur n'est donc pas certifié par son seul HTTP 200. Deux recherches différentielles sur 2023 renvoient exactement la fiche courante puis une page vide. Enfin, des événements `formality.historique` sont déjà présents dans deux des trois lignes du stock Bronze consultées : leur extraction ne nécessite pas de rejouer toute l'API. Voir [les mesures, limites et méthode recommandée](inpi-historique.md). Aucun changement des jobs n'a été effectué.
 
 ### 6.2 Point bloquant à qualifier : filtres documentaires
 
@@ -363,6 +385,10 @@ Tests réels, avec `pageSize=1` ou `2` :
 Avant une ingestion fiable : tests de bornes, cas sans résultat, données modifiées/supprimées et confirmations INPI. **Ne pas jeter automatiquement les tombstones dont le `updatedAt` est hors fenêtre** : cela pourrait laisser des documents retirés dans notre stockage.
 
 Pour `/companies/diff`, la v5 documente `from` exclusif et `to` inclusif, avec datetime et décalage UTC. Un créneau d'une heure a renvoyé un horodatage à l'intérieur de l'intervalle après conversion du fuseau. Utiliser un encodeur de paramètres : le `+` du fuseau doit être encodé en `%2B`. Les bornes exactes et les transitions de jour restent à tester systématiquement.
+
+**Qualification complémentaire du 23 octobre 2026 :** sur `/companies/diff`, le créneau UTC du 21 octobre `12:00:00–12:00:10` a renvoyé 18 enregistrements, dont **3 exactement à la borne basse**, en deux pages non vides et une page vide ; aucun SIREN répété entre ces pages. Les formats UTC avec/sans microsecondes et l'offset explicite ont donné le même count de 18. Cela ne démontre pas des filtres ignorés : l'écart observé est ici la borne basse inclusive, contrairement à la v5. Le premier correctif conservait donc ces enregistrements de frontière et bloquait les autres écarts. L'audit historique complémentaire ci-dessous a ensuite invalidé ce second contrôle. Voir [la qualification brut → Parquet et les limites](inpi-quotidien.md). Aucune garantie de couverture du stock FTP n'en est déduite.
+
+**Audit historique complémentaire du 23 octobre 2026 :** le count pour le 2 janvier 2023, 12:00–13:00 UTC annonce 16 résultats ; l'API renvoie 16 SIREN distincts puis une page vide, mais leurs `company.updatedAt` sont tous en 2026. `formality.updated` est absent de 10 fiches et hors créneau pour les six autres : aucun de ces champs n'est retenu comme date de sélection sans autre contrat. Le collecteur conserve les fiches, audite les écarts et clôture seulement après égalité des counts avant/après et contrôle d'unicité des pages. La qualification en mémoire a réussi sans écriture GCS. Voir [la reconstruction complète préparée et son budget](inpi-reconciliation.md) ; elle ne prétend pas reconstituer un journal juridique historique exhaustif.
 
 ### 6.3 Checksums : disponibles où ?
 
