@@ -59,7 +59,8 @@ Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 28/10/
 - bucket `gs://industrial-intelligence-dev-data` : `EU` multi-région, privé, `force_destroy = false` ;
 - Artifact Registry `rne` (`europe-west9`) et 4 secrets INPI dans Secret Manager ;
 - Cloud Run Jobs `rne-bootstrap`, `rne-materialize`, `rne-refresh` (`sync`), et Scheduler `rne-refresh-daily` toutes les 6 h ;
-- données RNE sous le préfixe `inpi/rne` (`raw/`, `bronze/`, `control/`). Rien d'autre (BigQuery, Workflows…) n'est créé.
+- données RNE sous le préfixe `inpi/rne` (`raw/`, `bronze/`, `control/`) ;
+- Cloud Run Job `sirene-archive` et Scheduler `sirene-archive-daily` (06:00 UTC) : stocks SIRENE data.gouv.fr sous `bronze/insee/sirene/`. Rien d'autre (BigQuery, Workflows…) n'est créé.
 
 Règles :
 

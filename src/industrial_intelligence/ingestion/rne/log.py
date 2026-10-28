@@ -50,14 +50,14 @@ class CloudLoggingFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
-def setup_logging(command: str, stream=None) -> None:
+def setup_logging(command: str, stream=None, app: str = "rne-ingest") -> None:
     """Send every record to stdout as JSON; replaces a previous setup (tests, reruns)."""
     root = logging.getLogger()
     for handler in list(root.handlers):
         if isinstance(handler.formatter, CloudLoggingFormatter):
             root.removeHandler(handler)
     handler = logging.StreamHandler(stream or sys.stdout)
-    handler.setFormatter(CloudLoggingFormatter({"app": "rne-ingest", "command": command}))
+    handler.setFormatter(CloudLoggingFormatter({"app": app, "command": command}))
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     for name in NOISY_LIBRARIES:
