@@ -1,6 +1,6 @@
 # Architecture des Données : Interconnexions & Modélisation SIRENE
 
-Ce document constitue la référence d'architecture pour l'intégration des données de la base SIRENE (INSEE) dans le Datalake (GCS) et le Data Warehouse (BigQuery) du projet **Industrial Intelligence**, conformément aux principes définis dans [`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md).
+Ce document constitue la référence d'architecture pour l'intégration des données de la base SIRENE (INSEE) dans le Datalake (GCS) et le Data Warehouse (BigQuery) du projet **Industrial Intelligence**, conformément aux principes définis dans [`AGENTS.md`](../../AGENTS.md).
 
 ---
 
@@ -96,7 +96,7 @@ LIMIT 100;
 
 ## 3. Interconnexions Externes avec l'Écosystème du Projet
 
-Conformément à la Section 5 de [`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md), les données SIRENE constituent la table de vérité pour joindre les autres gisements de données :
+Conformément à la Section 5 de [`AGENTS.md`](../../AGENTS.md), les données SIRENE constituent la table de vérité pour joindre les autres gisements de données :
 
 ### A. Rapprochement avec l'INPI RNE (API & SFTP)
 - **Données financières (Bilans saisis JSON)** :
@@ -104,7 +104,7 @@ Conformément à la Section 5 de [`AGENTS.md`](file:///home/mroyant/repository/i
   - Permet d'injecter dans la fiche entreprise le chiffre d'affaires, l'EBITDA, le résultat net, l'endettement et le ratio de valeur ajoutée.
 - **Documents juridiques & Actes (PDF)** :
   - L'API INPI (`/api/companies/{siren}/attachments`) expose les actes de création, PV d'AG et statuts.
-  - **Prudence méthodologique ([`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md))** : Ne pas confondre dirigeant et actionnaire, ni établissement et filiale. Les participations mentionnées dans les actes historiques nécessitent une traçabilité explicite (date, source et niveau de confiance).
+  - **Prudence méthodologique ([`AGENTS.md`](../../AGENTS.md))** : Ne pas confondre dirigeant et actionnaire, ni établissement et filiale. Les participations mentionnées dans les actes historiques nécessitent une traçabilité explicite (date, source et niveau de confiance).
 
 ### B. Rapprochement avec le Référentiel Géographique (COG / IGN / BAN)
 - **Code Officiel Géographique (COG INSEE)** :
@@ -189,5 +189,5 @@ Pour le module d'exploration relationnelle visé par *Industrial Intelligence*, 
 - `(:Company)-[:OPERATES_IN]->(:IndustrySector)` (N:1)
 - *(À terme avec INPI RNE)* : `(:Person)-[:MANAGES {role: STRING}]->(:Company)`
 
-> ⚠️ **Avertissement méthodologique majeur ([`AGENTS.md`](file:///home/mroyant/repository/industrial-intelligence/AGENTS.md) Section 5)** :
+> ⚠️ **Avertissement méthodologique majeur ([`AGENTS.md`](../../AGENTS.md) Section 5)** :
 > Deux entreprises situées à la même adresse (même SIRET ou adresse BAN) ne partagent **pas** nécessairement un lien capitalistique ou de filiale. Ne jamais créer d'arête de propriété (`OWNS` ou `SUBSIDIARY_OF`) sans un acte ou document financier l'attestant formellement.

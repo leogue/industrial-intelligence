@@ -1,4 +1,4 @@
-> **Obsolète (28 octobre 2026) :** le catalogue courant, `prepare-sync` et `current-status` ont été retirés. Le fonctionnement actuel est décrit dans [inpi-ingestion.md](inpi-ingestion.md). Cette page est conservée comme historique.
+> **Obsolète (28 octobre 2026) :** le catalogue courant, `prepare-sync` et `current-status` ont été retirés. Le fonctionnement actuel est décrit dans [inpi-ingestion.md](../rne/inpi-ingestion.md). Cette page est conservée comme historique.
 
 # RNE — stock, rattrapage et quotidien
 
@@ -33,7 +33,7 @@ uv run rne-ingest --bucket industrial-intelligence-dev-data \
   --delta-from 2026-03-01T00:00:00Z
 ```
 
-La borne est obligatoire, pas inférée du nom du ZIP ou d'un `updatedAt`. **Le 1er mars 2026 est l'hypothèse retenue**, pas une couverture certifiée par l'INPI ; voir [les indices du ZIP et les limites](inpi.md#recherche-publique-complémentaire-et-datation-interne-du-zip).
+La borne est obligatoire, pas inférée du nom du ZIP ou d'un `updatedAt`. **Le 1er mars 2026 est l'hypothèse retenue**, pas une couverture certifiée par l'INPI ; voir [les indices du ZIP et les limites](../rne/inpi.md#recherche-publique-complémentaire-et-datation-interne-du-zip).
 
 `prepare-sync` vérifie le stock complet, prépare son routage par footers et initialise les deux checkpoints. Le récent commence à minuit UTC deux jours avant la préparation, sans descendre avant la borne choisie. Le marqueur `control/{prefix}/sync.json` est en **version 2** et conserve `stock_assumed_from`.
 
@@ -74,7 +74,7 @@ Le verrou principal couvre tout le sync ; pas d'expiration permettant de voler l
 - `status=catching_up` ou `caught_up` ;
 - **`stock_cutoff_verified=false`**, même lorsque le périmètre choisi est entièrement parcouru.
 
-`caught_up` signifie « périmètre de collecte demandé terminé », pas exactitude juridique absolue ou historique complet depuis 2023. Les anomalies de qualité du stock restent déclarées. Le produit est un état courant ; voir [la qualification distincte des états historiques](inpi-historique.md).
+`caught_up` signifie « périmètre de collecte demandé terminé », pas exactitude juridique absolue ou historique complet depuis 2023. Les anomalies de qualité du stock restent déclarées. Le produit est un état courant ; voir [la qualification distincte des états historiques](../rne/inpi-historique.md).
 
 ## Transition cloud encore nécessaire
 
