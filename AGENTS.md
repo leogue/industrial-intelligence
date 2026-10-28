@@ -1,268 +1,99 @@
 # AGENTS.md — Industrial Intelligence
 
-Ce fichier est la référence de travail pour les agents de code (Codex, Claude Code, Cursor, etc.) qui interviennent dans ce dépôt. Il s'applique à l'ensemble du monorepo. Lire aussi `README.md`, `pyproject.toml` et les fichiers concernés **avant** toute modification.
+Instructions pour les agents de code (Claude Code, Codex, Cursor…) sur tout le dépôt. Le détail vit dans `README.md` et `docs/` : ce fichier ne garde que ce qui ne se devine pas en lisant le code.
 
-> **Règle principale :** travailler sur l'existant, ne pas confondre architecture envisagée et infrastructure réellement déployée, et éviter toute opération GCP coûteuse ou destructive sans accord explicite.
+## Projet
 
-## 1. Projet et objectif
+Projet académique Big Data, à trois développeurs : analyser le tissu économique et industriel français à partir de données ouvertes (SIRENE, INPI RNE, puis BODACC/BOAMP/DECP).
 
-**Industrial Intelligence** est un projet académique Big Data réalisé à **trois développeurs**. L'objectif est de construire une plateforme d'analyse du tissu économique et industriel français à partir de données ouvertes : entreprises, établissements, événements juridiques, comptes annuels, actes et, à terme, relations entre entités et marchés publics.
+Chaîne visée : **sources → connecteurs Python → GCS raw/bronze (originaux immuables) → ETL silver/gold → API/visualisation** (graphe d'entreprises à terme).
 
-Livrable technique visé : **ingestion reproductible → stockage brut → ETL → données analytiques → API/visualisation**. Le projet doit démontrer les choix d'architecture, l'exploitation de volumes importants, la qualité des données et des analyses. Une interface de type *link analysis* / graphe d'entreprises est envisagée, mais ne doit pas être confondue avec un registre complet des propriétaires effectifs.
+- Cloud-first sur GCP, sans infrastructure locale obligatoire : pas de Docker Compose, base locale ni émulateur. Docker sert uniquement à construire les images Cloud Run.
+- Python 3.13 + `uv`, OpenTofu pour l'infra, un seul monorepo. Des connecteurs modulaires et des jobs batch, pas un microservice par source.
+- Pas de Kafka, Airflow, Spark, Iceberg, BigQuery ni base graphe sans besoin mesuré et validé par l'équipe. Pour des petits volumes, Polars, DuckDB ou SQL suffisent.
 
-### Principes
+## Principes d'ingénierie
 
-- **Cloud-first sur Google Cloud Platform** : développement du code sur les machines des membres de l'équipe, stockage et services managés sur GCP.
-- **Pas d'infrastructure locale obligatoire** : ne pas ajouter spontanément Docker Compose, MinIO, PostgreSQL local, émulateurs GCP ou cluster Spark local. Les conteneurs restent possibles comme **artefacts de déploiement Cloud Run** si nécessaire.
-- **Python 3.13 + `uv`** pour le code Python et la gestion des dépendances ; **OpenTofu** pour l'infrastructure.
-- **Monorepo** avec un seul dépôt Git ; éviter un microservice réseau par source de données. Préférer des **connecteurs modulaires** et des **jobs d'ingestion**.
-- La **simplicité justifiée** prime sur l'accumulation de technologies. Ne pas ajouter Kafka, Dataflow, Airflow, Spark, Iceberg ou une GraphDB sans besoin mesuré et validé.
+Petite équipe, règle n° 1 : **rester simple**. On traite les cas qui comptent, pas tous les cas imaginables. Un code simple est plus facile à relire, à sécuriser et à modifier.
 
-## 2. État du dépôt : vérifié vs envisagé
+- **Faire ce qui est demandé, rien de plus.** Pas de fonctionnalité, de refactor ni d'« amélioration » hors de la tâche. Une correction de bug n'implique pas de nettoyer le code autour. Si quelque chose mérite d'être corrigé ailleurs, le signaler sans le faire.
+- **Le minimum de code qui résout le problème.** Pas d'abstraction, de helper ni d'option de config pour un seul usage, pas de conception pour des besoins hypothétiques. Trois lignes similaires valent mieux qu'une abstraction prématurée. Si un ingénieur senior trouverait ça trop compliqué, simplifier.
+- **Valider aux frontières, faire confiance à l'intérieur.** Valider les entrées externes : APIs INPI et data.gouv, FTP, fichiers sources, arguments CLI. Pas de fallback ni de gestion d'erreur pour des situations impossibles dans notre propre code : échouer bruyamment plutôt que masquer un bug.
+- **Réutiliser avant d'écrire.** Chercher un module ou un helper existant et suivre les patterns voisins. Pas de nouvelle dépendance sans raison écrite dans le message de commit.
+- **Des diffs chirurgicaux.** Chaque ligne modifiée se rattache à la tâche. Ne pas reformater, renommer ni recommenter du code qu'on n'avait pas besoin de toucher. Supprimer le code mort qu'on a créé ; laisser le code mort préexistant sauf demande.
+- **Les commentaires expliquent le _pourquoi_, pas le _quoi_.** Seulement là où la logique ne va pas de soi.
 
-Arborescence connue au moment de la rédaction :
+## Façon de travailler
 
-```text
-industrial-intelligence/
-├── apps/
-├── docs/
-├── frontend/
-├── infra/
-│   └── opentofu/
-│       ├── envs/dev.tfvars
-│       ├── main.tf
-│       └── storage.tf
-├── packages/
-├── src/industrial_intelligence/
-├── tests/
-├── .gitignore
-├── .python-version
-├── AGENTS.md
-├── pyproject.toml
-└── README.md
+- **Lire avant d'affirmer.** Ne jamais spéculer sur du code, une ressource GCP ou un fichier GCS qu'on n'a pas consulté. L'infra et les données se vérifient en lecture (`gcloud … describe/list`, `gcloud storage ls/cat`, logs).
+- **Spécification floue ou vrai choix de conception → s'arrêter et demander.** Un mauvais choix implémenté coûte plus cher qu'une question. Sinon, énoncer son hypothèse et avancer.
+- **Planifier avant un changement sur plusieurs fichiers.** Si le diff tient en une phrase, le faire directement.
+- **Prouver que ça marche.** Lancer les tests et le lint concernés avant de dire « fini », et montrer le résultat. Ne jamais déclarer réussi un test qui n'a pas tourné.
+- **Corriger la cause.** Ne jamais faire taire une erreur, sauter un test, ajouter `# noqa` ou coder une valeur en dur pour faire passer une vérification. Si un test semble faux, le dire au lieu de le contourner.
+- **En fin de tâche**, résumer : les fichiers modifiés, les commandes réellement exécutées et leur résultat, et ce qui est déployé ou seulement proposé. Mettre à jour `README.md`/`docs/` si une commande, un contrat ou l'architecture change.
+
+## Commandes
+
+```sh
+uv sync --locked                          # dépendances (uv add / uv remove ; commiter uv.lock)
+uv run pytest -q                          # tous les tests ; le réseau est bloqué par tests/conftest.py
+uv run pytest tests/test_rne_diff.py -q   # un fichier ; -k <nom> pour un test
+uv run ruff check . && uv run ruff format --check .
+uv run rne-ingest --help                  # CLI RNE : bootstrap, materialize, sync
+uv run --env-file .env rne-ingest …       # .env privé, chargé uniquement de façon explicite
 ```
 
-**Attention :** la présence de `apps/`, `packages/` ou `frontend/` ne prouve pas que des applications y sont déjà opérationnelles. Examiner les fichiers présents avant de créer des modules, déplacer le package racine ou refactoriser l'arborescence.
+Ne proposer que des commandes déclarées dans `pyproject.toml` (`[project.scripts]`). Les tests n'utilisent ni réseau ni GCP : les appels sont mockés (`httpx.MockTransport`, `tests/rne_fakes.py:MemoryStore`), avec des fixtures petites et synthétiques.
 
-Le `README.md` décrit actuellement :
+## Git
 
-- Projet GCP de développement : `industrial-intelligence-dev`.
-- Bucket GCS **configuré comme cible** : `gs://industrial-intelligence-dev-data`.
-- Localisation GCS : `EU` (**multi-région**), classe `STANDARD`, accès privé, `public_access_prevention = enforced`, `force_destroy = false`.
-- OpenTofu dans `infra/opentofu/`, avec les variables dans `envs/dev.tfvars`.
-- **État OpenTofu local pour l'instant** : `terraform.tfstate` ne doit pas être commité ; attention au travail simultané à trois.
-- Le dépôt et le README **ne prouvent pas qu'un `tofu apply` a déjà eu lieu**. Vérifier l'état réel avant de considérer une ressource comme existante.
+- Branche `<type>/<description-courte>` par fonctionnalité ou connecteur (ex. `feat/insee-parquet-parser`).
+- **Conventional Commits**, description en français, en minuscules, à l'infinitif, sans point final : `feat(infra): ajouter le bucket gcs de dev`. Changement incompatible : `!` ou pied `BREAKING CHANGE:`.
+- Indexer des chemins précis (`git add <chemins>`), puis vérifier `git diff --cached` et `git diff --cached --check`. Jamais de secrets, de `.env`, de `*.tfstate`/`*.tfplan` ni d'artefacts générés.
+- Les dossiers vides gardent un `.gitkeep`.
 
-Services **envisagés et non présumés déployés** : BigQuery, Cloud Run Jobs, Cloud Scheduler, Workflows, Secret Manager, Spark managé, OCR Mistral, éventuelles tables Iceberg, API et frontend.
+## GCP, OpenTofu et coûts
 
-## 3. Installation et commandes de référence
+Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 28/10/2026) :
 
-Depuis la racine du dépôt :
+- bucket `gs://industrial-intelligence-dev-data` : `EU` multi-région, privé, `force_destroy = false` ;
+- Artifact Registry `rne` (`europe-west9`) et 4 secrets INPI dans Secret Manager ;
+- Cloud Run Jobs `rne-bootstrap`, `rne-materialize`, `rne-refresh` (`sync`), et Scheduler `rne-refresh-daily` toutes les 6 h ;
+- données RNE sous le préfixe `sandbox/leo/inpi/rne`. Rien d'autre (BigQuery, Workflows…) n'est créé.
 
-```bash
-uv sync
-uv run python --version
+Règles :
 
-gcloud auth login
-gcloud config set project industrial-intelligence-dev
-gcloud auth application-default login
-gcloud auth application-default set-quota-project industrial-intelligence-dev
-```
+- **Demander un accord explicite avant** : `tofu apply`/`destroy`, tout changement IAM ou de facturation, un déploiement d'image sur un job, un téléchargement massif, de l'OCR payant, ou toute suppression ou écrasement de données GCS. Annoncer le projet, la ressource, le volume et le coût estimé.
+- Toujours planifier avec les deux fichiers : `tofu plan -var-file=envs/dev.tfvars -var-file=envs/rne-dev.tfvars -out=<nom>.tfplan`. Sans `rne-dev.tfvars`, le plan propose de détruire les ressources RNE.
+- L'état OpenTofu est **local, sur le poste de Léo** : un seul opérateur à la fois, et sauvegarder `terraform.tfstate` avant chaque apply.
+- Ne pas changer la région, le nom, l'accès public ni `force_destroy` du bucket : sa localisation ne se modifie pas sans le recréer.
+- Images Cloud Run : `docker build --platform linux/amd64 -f Dockerfile.rne`, épinglées **par digest** dans les tfvars. Procédure complète : `docs/inpi-ingestion.md`.
+- Pendant le développement : petits échantillons, limites explicites, préfixe GCS personnel (`sandbox/<prénom>/…`). Ne jamais écraser des données partagées.
+- Authentification par ADC uniquement (`gcloud auth application-default login`) : jamais de clé JSON de service account. Les identifiants `gcloud` CLI et ADC peuvent différer.
 
-- Utiliser **Application Default Credentials (ADC)** pour les SDK Python Google Cloud.
-- Les identifiants `gcloud auth` (CLI) et ADC peuvent être distincts : vérifier les deux au diagnostic.
-- Ne jamais ajouter de fichier JSON de clé de service account au dépôt.
-- Utiliser `uv add` / `uv remove` pour modifier les dépendances, et **commiter `uv.lock`** avec tout changement de dépendance si ce fichier existe.
-- Vérifier les scripts déclarés dans `pyproject.toml` avant de proposer `uv run <commande>` : ne pas inventer de commandes CLI qui n'existent pas encore.
-- Respecter le Python déclaré par `.python-version` et `pyproject.toml` ; la cible du projet est Python 3.13.
-- Ne créer des `uv workspaces` distincts dans `apps/` et `packages/` que si cela correspond à un découpage réel et validé. Ne pas transformer le dépôt arbitrairement.
+## Données : règles métier
 
-### OpenTofu
+- `siren` est l'identifiant canonique d'entreprise : une **chaîne de 9 caractères** dont on garde les zéros initiaux. `siret` (établissement) fait 14 caractères. Nom et adresse ne sont pas des identifiants.
+- **Dirigeant ≠ actionnaire**, **établissement ≠ filiale**, **co-localisation ≠ lien de propriété**. Une relation de propriété exige un document explicite, avec date, source et niveau de confiance. Distinguer fait extrait, inférence et inconnu.
+- Le registre des bénéficiaires effectifs est restreint : ne jamais le présumer en open data.
+- Les originaux `raw/` sont immuables. Toujours conserver la provenance : source, URL ou identifiant distant, `retrieved_at` UTC, sha256, taille, version.
+- Horodatages techniques en UTC ; les dates juridiques et métier restent telles que fournies.
+- Gros volumes : traitement en colonnes (Arrow, Parquet) et en streaming. Pydantic seulement pour les configs et métadonnées, pas ligne par ligne.
 
-```bash
-cd infra/opentofu
-tofu init
-tofu fmt -check
-tofu validate
-tofu plan -var-file=envs/dev.tfvars -out=dev.tfplan
-# tofu apply dev.tfplan  # SEULEMENT après approbation explicite
-```
+### Pièges INPI RNE (constatés)
 
-- **Ne pas lancer `tofu apply`, `tofu destroy` ou de modification IAM/facturation sans accord explicite.**
-- Ne pas changer la région, le nom du bucket, son mode d'accès ou sa politique de suppression sans expliquer l'impact et obtenir validation.
-- La localisation du bucket GCS ne se change pas comme une simple variable sans conséquence : un remplacement ou une migration peut être nécessaire.
-- L'état étant local, **ne jamais exécuter OpenTofu en parallèle depuis plusieurs machines**. Désigner un responsable des applications de plans. À terme, prévoir un backend GCS d'état **séparé** du stockage métier, avec procédure de migration documentée.
-- Aucun secret dans les `.tfvars`, les logs de CI, les outputs sensibles ou les fichiers d'état exposés.
+- Le stock FTP (`stock_RNE_formalites_…20260304…zip`) date d'environ mars 2026. Le différentiel repart de `2026-03-01T00:00:00Z`, une **hypothèse non certifiée** par l'INPI.
+- `/companies/diff` renvoie la **fiche actuelle** des entreprises modifiées dans la fenêtre, pas leur état passé. Ne pas rejouer le diff depuis 2023 : les événements historiques sont déjà dans `historique[]` du stock.
+- `/companies/diff/count` plafonne à 10 000 ; au-delà, couper la fenêtre. Quota annoncé de 10 000 appels/jour, non vérifié pour le diff. Un 429 doit mettre le job en pause, pas le faire échouer.
+- Le JWT de login dure 24 h. Ne jamais l'afficher, le logger ni le commiter.
+- Les identifiants FTP (stock, `www.inpi.net`) et SFTP/API (compte personnel) sont **distincts** : ne jamais les intervertir.
+- Les `bilansSaisis` sont déjà en JSON : pas d'OCR dessus. Un HTTP 500 sur l'historique ne prouve pas une absence de droits : tracer l'erreur, réessayer raisonnablement, continuer.
+- Ne pas inventer d'endpoint ni de paramètre : se référer aux docs techniques INPI citées dans `docs/inpi.md`.
 
-## 4. Collaboration à trois
+## Connecteurs et logs
 
-- **Conventional Commits obligatoires** : utiliser le format `type(scope): description`, avec un scope facultatif. Types usuels : `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `style`. Exemple : `feat(infra): add European GCS bucket`. Signaler les changements incompatibles avec `!` ou un pied de message `BREAKING CHANGE:`.
-- **Gestion des branches et commits** : La branche principale est `main`; il est formellement interdit de committer ou de pousser directement sur `main`. Les branches doivent suivre le format `<type>/<description-courte>` (ex: `feat/insee-parquet-parser`). Les Pull Requests ciblent obligatoirement `main`. Les descriptions de commit sont en français, minuscules, sans point final, à l’inf initif (ex: `feat(infra): ajouter le bucket gcs de dev`). Le fichier `AGENTS.md` est désormais en lecture seule pour l’agent après cette commande.
-- Avant tout commit, indexer uniquement les fichiers pertinents avec `git add <chemins>`, puis vérifier `git diff --cached` et `git diff --cached --check`. Ne pas indexer de secrets, d’états OpenTofu ni d’artefacts générés. Ne pas créer de commit ou pousser sans demande explicite.
-- Conserver les dossiers du projet encore vides avec un fichier `.gitkeep` ; retirer ce fichier lorsque le dossier contient des fichiers suivis utiles.
-- Une **branche Git par fonctionnalité/connecteur** ; revue par au moins un autre membre avant fusion vers la branche principale.
-- Partager les **interfaces et schémas de données communs** en priorité ; développer ensuite chaque source indépendamment.
-- Ne pas modifier une interface partagée sans identifier les connecteurs et tests impactés.
-- Ne pas reformatter/refactoriser des fichiers sans rapport avec la tâche.
-- Ne pas déployer automatiquement depuis une branche de développement vers un environnement de démonstration stable.
-- Sur GCP, préférer des chemins et datasets de test propres à chaque développeur ; ne jamais écraser des données partagées pendant un essai.
-- Toute PR de nouveau connecteur comporte : documentation source/authentification, exécution reproductible, tests, limites, fréquence de mise à jour et schéma de sortie.
+- Un connecteur : découvre les ressources, télécharge en flux, écrit le brut et sa provenance dans GCS, gère l'auth, la pagination, le backoff (429/5xx, `Retry-After`) et la reprise.
+- **Idempotent**, et le **checkpoint n'avance qu'après succès**. Pas de boucle infinie : budgets d'appels et de temps explicites.
+- Logs : `log.py:log_event(logger, "nom_evenement", **champs)`, qui produit du JSON structuré lu par Cloud Logging. **Jamais** de secret, de token, de payload d'entreprise ni de SIREN dans les logs : seulement des compteurs techniques.
+- Une PR de nouveau connecteur documente : la source et son authentification, une exécution reproductible, les tests, les limites, la fréquence de mise à jour et le schéma de sortie.
 
-## 5. Sources de données actuellement identifiées
-
-Les accès exacts sont à confirmer depuis la configuration sécurisée de chaque environnement : **ne pas supposer que les identifiants sont présents dans le dépôt**.
-
-| Source | Accès / point d'entrée | Données | Stratégie |
-|---|---|---|---|
-| **INSEE SIRENE, via data.gouv.fr** | https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret | Unités légales (SIREN), établissements (SIRET), historiques, géographie administrative | Stock/Parquet **mensuel**, chargement de snapshot |
-| **INPI RNE API** | `https://registre-national-entreprises.inpi.fr/api/` | Fiches juridiques, formalités, documents, bilans saisis, actes | Requêtes ciblées + deltas **quotidiens** |
-| **INPI SFTP documentaire** | `registre-national-entreprises.inpi.fr:9222` (SFTP) | `Actes_PDF/`, `Bilans_PDF/` | Récupération documentaire incrémentale ou ciblée |
-| **INPI ancien FTP stock** | `www.inpi.net` (accès technique distinct) | ZIP de stock RNE formalités et comptes | Bootstrap éventuel, à revalider côté authentification |
-| **API SIRENE INSEE** | API officielle INSEE (clé requise) | Requêtes ciblées et mises à jour | **Optionnelle** : accès non confirmé pour l'équipe |
-| **BODACC / BOAMP / DECP** | À documenter | Événements légaux / marchés publics | **Sources envisagées**, ne pas supposer de connecteurs existants |
-
-### INPI API — auth et endpoints de référence
-
-```text
-POST /api/sso/login
-     JSON: {"username":"...", "password":"..."}
-     → JWT ; utiliser Authorization: Bearer <token>
-
-GET  /api/companies/{siren}
-GET  /api/companies/{siren}/attachments
-GET  /api/companies/diff                 # paramètres et pagination à vérifier dans la doc
-GET  /api/actes/{id}/download
-```
-
-- Le login INPI testé par l'équipe retourne un JWT comportant `expiresIn: 86400` (24 h). Ne **jamais** hardcoder, afficher ou commiter le JWT.
-- L'API `attachments` distingue notamment `actes`, `bilans` et `bilansSaisis` ; **les bilans saisis sont déjà structurés en JSON**, donc ne pas leur appliquer d'OCR sans justification.
-- L'accès INPI SFTP documentaire utilise des identifiants **distincts de l'ancien FTP `www.inpi.net`**. Ne jamais intervertir ces jeux d'identifiants.
-- Certains appels d'historique du RNE ont déjà renvoyé des erreurs `500` pour certaines dates/entreprises : tracer l'erreur, réessayer raisonnablement et poursuivre les autres items ; ne pas conclure automatiquement à une absence de droits.
-- Ne pas inventer d'endpoint ni de paramètre ; se référer aux documentations techniques INPI en cas de doute.
-- SFTP et API peuvent exposer des versions, dates, restrictions et quotas différents : documenter les limites effectivement constatées.
-
-### Identifiants métier
-
-- `siren` : **identifiant canonique d'entreprise** (chaîne de **9 caractères**, conserver les zéros initiaux).
-- `siret` : identifiant d'établissement (chaîne de **14 caractères**).
-- Les noms et adresses ne sont **pas** des identifiants fiables à eux seuls.
-- Conserver les identifiants d'actes, de bilans, de formalités et la source exacte de toute relation.
-- **Dirigeant ≠ actionnaire** ; **établissement ≠ filiale** ; **co-localisation ≠ lien de propriété**.
-- Les statuts et actes peuvent contenir des participations **historiques**, non nécessairement à jour. Une relation d'ownership ne doit être créée que si le document l'étaye explicitement et avec date/source/niveau de confiance.
-- L'accès au registre des bénéficiaires effectifs est restreint ; ne jamais présumer que ces données sont de l'open data librement récupérable.
-
-## 6. Architecture data cible (à implémenter progressivement)
-
-```text
-Sources publiques / APIs / SFTP
-          ↓
-Connecteurs Python (jobs ponctuels)
-          ↓
-GCS RAW / BRONZE : ZIP, JSON, PDF originaux, métadonnées
-          ↓
-ETL : validation, normalisation, déduplication, rapprochement SIREN/SIRET
-          ↓
-SILVER : données canoniques, principalement Parquet ; Iceberg si justifié
-          ↓
-GOLD : tables analytiques et arêtes/nœuds (BigQuery envisagé)
-          ↓
-API / visualisations / exploration du graphe
-```
-
-- **GCS** = stockage objet ; **Parquet** = format analytique ; **Apache Iceberg** = format de table transactionnel (choix encore à confirmer). Ne pas traiter ces solutions comme interchangeables.
-- Favoriser **Cloud Run Jobs** pour les ingestions batch et **Cloud Scheduler + Workflows** si un ordonnancement multi-étapes devient nécessaire. Ces services ne sont pas à présumer créés.
-- Spark managé doit répondre à un besoin de volumes/jointures mesuré. Pour des tests et petits volumes, Polars, DuckDB ou SQL peuvent suffire.
-- Les sources courantes relèvent surtout du **batch mensuel** et du **batch incrémental quotidien** ; ne pas qualifier un polling API quotidien de vrai streaming.
-- OCR Mistral : **uniquement sur les PDF utiles**, avec suivi des appels/coûts, extraction vérifiable et conservation du document d'origine. Les résultats OCR/LLM ne sont pas une preuve juridique autonome.
-
-### Convention de stockage proposée (non garantie créée)
-
-```text
-gs://industrial-intelligence-dev-data/
-├── raw/{source}/{resource}/ingested_date=YYYY-MM-DD/{original_file}
-├── bronze/{source}/{dataset}/...
-├── silver/{entity}/...
-├── gold/{dataset}/...
-└── sandbox/{developer}/...
-```
-
-Toujours préserver : source, URL ou identifiant distant, `retrieved_at` (UTC), date métier si disponible, hash/checksum, format, taille, version et statut de traitement. Les fichiers **raw** doivent être immuables ; ne pas modifier un original en place.
-
-## 7. Contrats des connecteurs et des pipelines
-
-Un connecteur doit être **indépendant** du calcul analytique et des interfaces utilisateur.
-
-Responsabilités d'un connecteur :
-
-1. Découvrir les ressources à récupérer (API, page de métadonnées, SFTP, fichiers de stock).
-2. Télécharger les données **en streaming/chunks**, sans charger plusieurs Go en RAM.
-3. Enregistrer le brut et les métadonnées de provenance dans GCS.
-4. Gérer l'authentification, la pagination, les limitations de débit, les retries et la reprise.
-5. Retourner un résultat structuré : source, ressource distante, URI GCS, checksum, taille, horodatages et erreurs éventuelles.
-
-Contrat logique suggéré, sans imposer de noms de classes tant que l'implémentation n'existe pas : `discover()` / `ingest()` / état d'avancement documenté.
-
-**Règles non négociables :**
-
-- **Idempotence** : rejouer une ingestion ne doit pas créer de doublons métiers ou corrompre les tables.
-- **Checkpoint seulement après succès** : ne pas avancer le curseur/date de synchronisation si le téléchargement ou la validation échoue.
-- **Backoff** sur `429`, `5xx` et erreurs réseau transitoires ; respecter `Retry-After` si présent ; ne pas boucler indéfiniment.
-- **Pagination complète** sur les APIs ; gestion explicite des suppressions/tombstones et modifications.
-- **UTC** pour les horodatages techniques ; conserver les dates juridiques/métier telles qu'elles sont fournies et leur contexte.
-- **Qualité de données** : vérifier unicité des clés attendues, schémas, nulls, formats, nombres de lignes et rejets.
-- **Traçabilité** de chaque ligne ou relation vers la source, le document ou le snapshot utilisé.
-- **Données sensibles** : minimiser l'exposition de données personnelles, appliquer les licences de réutilisation et éviter de copier les documents complets dans les logs ou les exemples Git.
-
-Les modèles Pydantic sont adaptés aux **configurations, métadonnées et messages de contrôle**. Pour des millions de lignes, utiliser des traitements colonne/Arrow/Parquet plutôt que de valider chaque cellule via Pydantic sans nécessité.
-
-## 8. Sécurité, IAM et budget GCP
-
-- Ne jamais afficher de mots de passe, tokens Bearer, clés API ou credentials SFTP/FTP dans une réponse, un log, une PR ou une capture.
-- Secrets locaux : variables d'environnement **non commitées**. Secrets cloud : **Secret Manager** et service accounts à privilèges minimaux.
-- **Ne pas activer l'accès public** au bucket ou à des documents INPI. Ne pas attribuer `Owner`/`Editor` par commodité à tous les membres.
-- Ne pas créer de service account key longue durée si ADC / Workload Identity Federation suffit.
-- Toujours confirmer **projet, région, ressource cible et coût potentiel** avant un job de masse ou un déploiement.
-- Par défaut : petits échantillons, limites de lignes/documents explicites, pas de téléchargement intégral, OCR massif ni job Spark coûteux pendant le développement.
-- Avant toute ressource facturable, estimer le volume stocké, le nombre d'appels API/OCR, le temps d'exécution et l'impact sur la facture. Les crédits GCP ne remplacent pas un budget/alertes.
-- `force_destroy = false` est une protection utile mais pas un système de sauvegarde. Éviter toute suppression non réversible.
-
-## 9. Tests, qualité et reproductibilité
-
-- Ajouter des **tests unitaires sans accès réseau** pour les parsers, normalisateurs, schémas, transformations et erreurs de connecteurs.
-- Mocker les réponses INPI/data.gouv et les appels GCS ; conserver des fixtures **petites et anonymisées**.
-- Ajouter si nécessaire des tests d'intégration cloud **explicites, manuels ou séparés** ; ne pas télécharger des Go de données avec `pytest`.
-- Exécuter les outils **réellement configurés dans le repo** (`uv run pytest`, Ruff, typage, etc.) ; ne pas supposer que toutes les dépendances sont installées.
-- Une nouvelle transformation doit indiquer ses entrées/sorties, validations, unités, dates et règles de déduplication.
-- Documenter le bootstrap initial, le refresh incrémental, le backfill, la reprise après incident et les limites/coûts.
-- Ne pas prétendre qu'un lien de propriété ou qu'une prédiction est établi sans preuve : distinguer **fait extrait**, **inférence** et **donnée inconnue**.
-
-## 10. Instructions pour tout agent avant et après une tâche
-
-**Avant :**
-
-1. Lire la demande, `README.md`, la configuration concernée et le code existant.
-2. Identifier si la modification porte sur **code**, **données**, **infrastructure** ou **sécurité**.
-3. Exposer toute hypothèse importante, notamment l'existence réelle des services GCP.
-4. Privilégier la modification minimale cohérente avec l'architecture actuelle.
-5. Si la tâche implique suppression, déploiement, changement IAM, lecture massive, OCR payant ou accès à des secrets : **demander une autorisation explicite** avant l'action.
-
-**Après :**
-
-1. Résumer **les fichiers modifiés** et les décisions techniques.
-2. Indiquer **les commandes/tests réellement exécutés**, avec résultats ; ne pas déclarer un test « OK » sans l'avoir exécuté.
-3. Identifier les migrations, changements IAM, ressources facturables et éventuels coûts.
-4. Distinguer ce qui est **implémenté et vérifié** de ce qui est **proposé mais non déployé**.
-5. Mettre à jour `README.md` / `docs/` lorsque le comportement, les commandes, les contrats ou l'architecture changent.
-
-## 11. Priorités de réalisation
-
-1. Fiabiliser le dépôt, `uv`, les contrats et les tests.
-2. Confirmer IAM/ADC, bucket GCS, OpenTofu et budget sans opérations destructives.
-3. Implémenter **SIRENE bulk Parquet** et **INPI API** sur petits échantillons.
-4. Stocker les originaux et métadonnées de provenance dans GCS.
-5. Construire les schémas canoniques `Company`, `Establishment`, `LegalEvent`, `FinancialStatement`, `Document` et `Relationship` selon les données effectivement observées.
-6. Ajouter ETL Silver/Gold et première requête analytique BigQuery.
-7. Ajouter la récupération ciblée des actes PDF et l'OCR uniquement si leur exploitation est utile à la démonstration.
-8. Automatiser les rafraîchissements, puis construire l'API et la visualisation du graphe.
-
-**En cas de contradiction entre une suggestion d'architecture et le code/README courant, ne pas modifier silencieusement l'architecture : expliquer le choix et conserver un changement cohérent, minimal et testable.**

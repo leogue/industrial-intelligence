@@ -361,7 +361,7 @@ Vérifications locales : **166 tests hors réseau**, Ruff lint/formatage, lockfi
 
 **Aucune image construite/publiée, aucun plan/apply, aucune écriture GCS ni modification de job/Scheduler/IAM pendant cette simplification.** Le profil reste sur l'image déployée et les checkpoints existants ; il faut préparer une migration explicite avant déploiement. La précondition OpenTofu attend désormais un marqueur v2 : un plan avec le marqueur v1 actuel ne doit pas être présenté comme « sans changement, prêt à appliquer ».
 
-Les principes demandés sont conservés dans [engineering-principles.md](engineering-principles.md), prêts à reporter manuellement dans `AGENTS.md`, resté inchangé conformément à sa règle de lecture seule.
+Les principes demandés ont été reportés dans `AGENTS.md` le 28 octobre 2026 (section « Principes d'ingénierie »).
 
 ## Deuxième passe locale — chemins d'exécution unifiés, non déployée
 
