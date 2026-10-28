@@ -6,7 +6,7 @@
 
 **Essai initial du 22 octobre 2026 :** `stock_000001.json` converti en **5 000 lignes / 5 000 SIREN distincts**, **0 rejet**, Parquet de **1 672 324 octets**, puis relu et contrôlé depuis GCS. À l'issue de cet essai, le snapshot était **partiel : 1 fichier interne sur 5 470**.
 
-**La conversion nationale est terminée avec succès** (`rne-materialize-vdrpj`, du 22 octobre à 20:10:41 UTC au 23 octobre à 03:23:55 UTC, **7 h 13 min 14 s**). Le manifeste global est publié : **5 470 / 5 470 membres**, **27 348 472 lignes valides**, **1 rejet** et **822 répétitions locales de SIREN**. Le statut qualité est `requires_review` ; l'unicité nationale reste non vérifiée. Le snapshot est techniquement complet, pas un état courant Silver certifié. Voir le [journal](deploiement-rne-dev.md) et la section 6.
+**La conversion nationale est terminée avec succès** (`rne-materialize-vdrpj`, du 22 octobre à 20:10:41 UTC au 23 octobre à 03:23:55 UTC, **7 h 13 min 14 s**). Le manifeste global est publié : **5 470 / 5 470 membres**, **27 348 472 lignes valides**, **1 rejet** et **822 répétitions locales de SIREN**. Le statut qualité est `requires_review` ; l'unicité nationale reste non vérifiée. Le snapshot est techniquement complet, pas un état courant Silver certifié. Voir le [journal](../archives/deploiement-rne-dev.md) et la section 6.
 
 Le catalogue ZIP indique **177 360 918 612 octets décompressés** pour le stock complet et un fichier interne maximal de **85 269 573 octets**. Ces nombres proviennent du répertoire central, pas d'un traitement intégral des lignes.
 
@@ -51,7 +51,7 @@ Le checkpoint du différentiel `control/{prefix}/checkpoint.json` n'est **jamais
 
 Les blocs RNE personne morale/physique/exploitation étant variables, on n'infère pas 5 470 schémas Parquet incompatibles. Les colonnes typées servent aux filtres/jointures ; `company_json` conserve les autres informations pour les transformations Silver ultérieures. Le ZIP conserve les octets originaux, y compris leur sérialisation.
 
-`ijson` décode les nombres décimaux en `Decimal` et `simplejson` les resérialise sans conversion en flottant. Les dates originales restent également dans `company_json`, en plus du timestamp technique normalisé. Le même schéma est désormais utilisé pour les pages API par `refresh --with-parquet` ; voir [le guide du quotidien](inpi-quotidien.md). Cette collecte append-only ne consolide pas automatiquement le stock en état courant.
+`ijson` décode les nombres décimaux en `Decimal` et `simplejson` les resérialise sans conversion en flottant. Les dates originales restent également dans `company_json`, en plus du timestamp technique normalisé. Le même schéma est désormais utilisé pour les pages API par `refresh --with-parquet` ; voir [l'ancienne qualification du quotidien](../archives/inpi-quotidien.md). Cette collecte append-only ne consolide pas automatiquement le stock en état courant.
 
 ## 3. Validation, rejets et intégrité
 
@@ -146,7 +146,7 @@ Un résultat `partial` à la limite temporelle exige une relance explicite aprè
 
 1. Examiner l'unique rejet, les 822 répétitions locales et l'unicité globale par SIREN, sans arbitrer des versions sans règle métier.
 2. Vérifier le coût facturé ; la taille observée est de l'ordre de 16,20 Go de Bronze pour 177,36 Go de JSON décompressés, en plus du ZIP intact de 15,14 Go.
-3. Confirmer une borne de couverture stock → flux puis initialiser/rattraper le différentiel brut + Parquet déjà disponible ; voir [le guide du quotidien](inpi-quotidien.md).
+3. Confirmer une borne de couverture stock → flux puis initialiser/rattraper le différentiel brut + Parquet déjà disponible ; voir [le guide d'ingestion actuel](inpi-ingestion.md).
 4. Construire l'état courant Silver et les tables métiers avant de présenter une base analytique automatiquement à jour.
 
 Le raw national est conservé et **la matérialisation nationale est techniquement complète, avec manifeste global publié et qualité à examiner**. Aucun Spark, Iceberg, GraphDB ni base locale n'est ajouté pour cette étape.

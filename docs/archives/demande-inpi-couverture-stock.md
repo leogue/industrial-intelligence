@@ -1,6 +1,6 @@
 # Demande de confirmation de couverture du stock RNE
 
-**Statut : brouillon facultatif conservé pour référence ; aucun envoi prévu à la demande de l'utilisateur.** La recherche publique et les nouveaux constats sur les dates internes du ZIP sont dans [inpi.md](inpi.md#recherche-publique-complémentaire-et-datation-interne-du-zip). La couverture reste non certifiée ; le contact n'est pas une condition imposée à la suite du projet.
+**Statut : brouillon facultatif conservé pour référence ; aucun envoi prévu à la demande de l'utilisateur.** La recherche publique et les nouveaux constats sur les dates internes du ZIP sont dans [inpi.md](../rne/inpi.md#recherche-publique-complémentaire-et-datation-interne-du-zip). La couverture reste non certifiée ; le contact n'est pas une condition imposée à la suite du projet.
 
 ## Vérifications du 25 octobre 2026
 

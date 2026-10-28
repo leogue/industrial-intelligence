@@ -1,6 +1,6 @@
 # Audit du volume de réconciliation — 25 octobre 2026
 
-> **Portée de l'audit : coût potentiel d'un rejeu du différentiel, pas estimation d'un historique juridique exhaustif.** La [qualification historique suivante](inpi-historique.md) confirme qu'une fenêtre ancienne peut renvoyer le courant, que des événements sont déjà dans le stock, et rappelle que la documentation parle de liasses pour le count. Les extrapolations ci-dessous ne constituent donc ni une ETA fiable, ni une justification pour accélérer ce rejeu, ni un nombre de versions historiques distinctes.
+> **Portée de l'audit : coût potentiel d'un rejeu du différentiel, pas estimation d'un historique juridique exhaustif.** La [qualification historique suivante](../rne/inpi-historique.md) confirme qu'une fenêtre ancienne peut renvoyer le courant, que des événements sont déjà dans le stock, et rappelle que la documentation parle de liasses pour le count. Les extrapolations ci-dessous ne constituent donc ni une ETA fiable, ni une justification pour accélérer ce rejeu, ni un nombre de versions historiques distinctes.
 
 ## Deux horizons distincts
 
