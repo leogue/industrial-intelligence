@@ -19,6 +19,7 @@ dependencies = [
 industrial-intelligence = "industrial_intelligence:main"
 rne-ingest = "industrial_intelligence.ingestion.rne.cli:main"
 sirene-ingest = "industrial_intelligence.ingestion.sirene.cli:main"
+bodacc-ingest = "industrial_intelligence.ingestion.bodacc.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

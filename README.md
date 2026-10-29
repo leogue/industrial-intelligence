@@ -98,4 +98,5 @@ Les fichiers `infra/opentofu/rne*.tf` définissent Artifact Registry, les secret
 
 - **[RNE](docs/rne/)** : [guide principal d'ingestion](docs/rne/inpi-ingestion.md), exploration INPI, schéma Parquet, historique des données et coûts.
 - **[SIRENE](docs/sirene/)** : [ingestion mensuelle data.gouv.fr](docs/sirene/sirene-ingestion.md) (commande `sirene-ingest`), [accès aux données](docs/sirene/sirene.md), dictionnaires des stocks et propositions de modélisation.
+- **[BODACC](docs/bodacc/)** : [ingestion quotidienne des annonces commerciales](docs/bodacc/bodacc-ingestion.md) (commande `bodacc-ingest`), depuis 2008.
 - **[Archives](docs/archives/)** : anciennes approches, audits, brouillon de contact INPI et journal des opérations. Ces documents ne sont pas des procédures actuelles.
