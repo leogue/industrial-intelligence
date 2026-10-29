@@ -10,7 +10,6 @@ Chaîne visée : **sources → connecteurs Python → GCS raw/bronze (originaux 
 
 - Cloud-first sur GCP, sans infrastructure locale obligatoire : pas de Docker Compose, base locale ni émulateur. Docker sert uniquement à construire les images Cloud Run.
 - Python 3.13 + `uv`, OpenTofu pour l'infra, un seul monorepo. Des connecteurs modulaires et des jobs batch, pas un microservice par source.
-- Pas de Kafka, Airflow, Spark, Iceberg, BigQuery ni base graphe sans besoin mesuré et validé par l'équipe. Pour des petits volumes, Polars, DuckDB ou SQL suffisent.
 
 ## Principes d'ingénierie
 
@@ -54,13 +53,14 @@ Ne proposer que des commandes déclarées dans `pyproject.toml` (`[project.scrip
 
 ## GCP, OpenTofu et coûts
 
-Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 28/10/2026) :
+Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 29/10/2026) :
 
 - bucket `gs://industrial-intelligence-dev-data` : `EU` multi-région, privé, `force_destroy = false` ;
 - Artifact Registry `rne` (`europe-west9`) et 4 secrets INPI dans Secret Manager ;
 - Cloud Run Jobs `rne-bootstrap`, `rne-materialize`, `rne-refresh` (`sync`), et Scheduler `rne-refresh-daily` toutes les 6 h ;
 - données RNE sous le préfixe `inpi/rne` (`raw/`, `bronze/`, `control/`) ;
-- Cloud Run Job `sirene-archive` et Scheduler `sirene-archive-daily` (06:00 UTC) : stocks SIRENE data.gouv.fr sous `bronze/insee/sirene/`. Rien d'autre (BigQuery, Workflows…) n'est créé.
+- Cloud Run Job `sirene-archive` et Scheduler `sirene-archive-daily` (06:00 UTC) : stocks SIRENE data.gouv.fr sous `bronze/insee/sirene/`.
+- Cloud Run Job `bodacc-archive` et Scheduler `bodacc-archive-daily` (08:00 UTC) : annonces BODACC de la DILA sous `raw/dila/bodacc/`, checkpoint sous `control/dila/bodacc/`. Rien d'autre (BigQuery, Workflows…) n'est créé.
 
 Règles :
 
