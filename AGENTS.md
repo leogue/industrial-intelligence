@@ -10,7 +10,6 @@ Chaîne visée : **sources → connecteurs Python → GCS raw/bronze (originaux 
 
 - Cloud-first sur GCP, sans infrastructure locale obligatoire : pas de Docker Compose, base locale ni émulateur. Docker sert uniquement à construire les images Cloud Run.
 - Python 3.13 + `uv`, OpenTofu pour l'infra, un seul monorepo. Des connecteurs modulaires et des jobs batch, pas un microservice par source.
-- Pas de Kafka, Airflow, Spark, Iceberg, BigQuery ni base graphe sans besoin mesuré et validé par l'équipe. Pour des petits volumes, Polars, DuckDB ou SQL suffisent.
 
 ## Principes d'ingénierie
 
