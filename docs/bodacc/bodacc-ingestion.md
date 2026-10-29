@@ -40,7 +40,7 @@ docker push europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/bodacc:<
 gcloud run jobs execute bodacc-archive --region europe-west9   # run manuel
 ```
 
-Premier run : environ 6 900 jours de 2008 à aujourd'hui, ~2 s par jour, soit environ 4 h et **12 à 13 Go** (extrapolé de 1,3 Mo pour 5 928 annonces). Si le budget de temps est atteint, le run suivant reprend au checkpoint. Coût estimé : stockage ~0,35 $/mois, Cloud Run < 1 $ pour le rattrapage.
+Premier chargement : environ 6 900 jours de 2008 à aujourd'hui et **12 à 13 Go** (extrapolé de 1,3 Mo pour 5 928 annonces). Mesuré le 29/10/2026 : ~2,9 s par jour, soit plus que le budget de 5,5 h d'un run ; le run s'arrête en `partial` et le suivant reprend au checkpoint. Coût estimé : stockage ~0,35 $/mois, Cloud Run < 1 $ pour le rattrapage.
 
 ## Fonctionnement
 
