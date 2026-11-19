@@ -136,6 +136,9 @@ class GcsStore:
             raise IngestionError("Stored object size mismatch; no receipt will be written")
         return {**result, "generation": int(blob.generation)}
 
+    def list_names(self, prefix: str) -> list[str]:
+        return [blob.name for blob in self.bucket.list_blobs(prefix=prefix)]
+
     def stat(self, name: str) -> dict | None:
         blob = self.bucket.blob(name)
         try:
