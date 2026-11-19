@@ -52,6 +52,9 @@ class MemoryStore:
         if name not in self.objects:
             self.put(name, value)
 
+    def list_names(self, prefix):
+        return [name for name in self.objects if name.startswith(prefix)]
+
     def stat(self, name):
         item = self.objects.get(name)
         return {"size": len(item[0]), "generation": item[1]} if item else None
