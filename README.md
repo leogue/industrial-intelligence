@@ -24,6 +24,13 @@ Les SDK Google utilisent les Application Default Credentials (ADC). Ne pas stock
 
 La configuration OpenTofu est dans `infra/opentofu/`. L’environnement de développement cible `industrial-intelligence-dev`.
 
+**Attention, état local vérifié le 26/11/2026 : un plan global propose encore 5 suppressions**,
+celles du prototype `silver-build` (DuckDB), dont la configuration n'est que dans un stash. Les
+ressources Spark/BigLake sont de nouveau déclarées dans `spark.tf`. Ne pas appliquer un plan
+global avant d'avoir décidé du sort de `silver-build` ; voir
+[l'ETL Spark](docs/etl/spark-graphe.md#infrastructure-infraopentofusparktf) et
+[la procédure lakehouse-load](docs/lakehouse/lakehouse-load.md#avertissement-sur-létat-local--19112026).
+
 ```sh
 cd infra/opentofu
 tofu init
@@ -100,4 +107,5 @@ Les fichiers `infra/opentofu/rne*.tf` définissent Artifact Registry, les secret
 - **[SIRENE](docs/sirene/)** : [ingestion mensuelle data.gouv.fr](docs/sirene/sirene-ingestion.md) (commande `sirene-ingest`), [accès aux données](docs/sirene/sirene.md), dictionnaires des stocks et propositions de modélisation.
 - **[BODACC](docs/bodacc/)** : [ingestion quotidienne des annonces commerciales](docs/bodacc/bodacc-ingestion.md) (commande `bodacc-ingest`), depuis 2008.
 - **[Lakehouse](docs/lakehouse/)** : [publication du dernier run Silver en tables Iceberg](docs/lakehouse/lakehouse-load.md) dans le catalogue BigLake (commande `lakehouse-load`).
+- **[ETL Spark](docs/etl/)** : [bronze SIRENE/RNE/BODACC → tables Iceberg silver et gold](docs/etl/spark-graphe.md) (fiche entreprise, dirigeants, graphe de liens, indicateurs territoriaux), batch Dataproc Serverless.
 - **[Archives](docs/archives/)** : anciennes approches, audits, brouillon de contact INPI et journal des opérations. Ces documents ne sont pas des procédures actuelles.

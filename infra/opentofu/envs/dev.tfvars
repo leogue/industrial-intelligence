@@ -10,3 +10,10 @@ sirene_image            = "europe-west9-docker.pkg.dev/industrial-intelligence-d
 # Image du commit 06286a3.
 enable_bodacc_ingestion = true
 bodacc_image            = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/bodacc@sha256:f398b9b0f0fceac18c4ed644715f00870fc0737c240adb0e7b6ccc081720e011"
+
+# Silver -> Iceberg : image du commit d97be7b, Scheduler quotidien à 12:00 UTC.
+enable_lakehouse_load = true
+lakehouse_image       = "europe-west9-docker.pkg.dev/industrial-intelligence-dev/rne/lakehouse@sha256:5df15229681b2d51a3f027d0d03005400993f1ce87cc85d363e82fd5aac855f5"
+
+# Spark ETL : réseau, compte etl-spark, catalogue Iceberg BigLake et namespaces silver_spark/gold.
+enable_lakehouse = true

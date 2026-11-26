@@ -1,6 +1,6 @@
 # Publishes the latest complete Silver run as Iceberg tables in the BigLake catalog.
-# The catalog (industrial_intelligence, namespace silver, data under gs://BUCKET/iceberg/) was
-# created outside OpenTofu on 2026-10-29: it is referenced here, not managed.
+# The catalog (industrial_intelligence, namespace silver, data under gs://BUCKET/iceberg/) is
+# declared in spark.tf; this file only references it by name.
 # Reuses the APIs enabled and the Artifact Registry repository created by rne.tf.
 variable "enable_lakehouse_load" {
   description = "Créer le job lakehouse-load, son compte de service, ses droits et son Scheduler."
