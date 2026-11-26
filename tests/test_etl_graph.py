@@ -332,3 +332,42 @@ def test_require_identifiers_stops_on_short_siren(spark):
     graph.require_identifiers(good, "t", {"siren": 9})
     with pytest.raises(ValueError, match="invalid identifier"):
         graph.require_identifiers(good.union(spark.createDataFrame([("1",)])), "t", {"siren": 9})
+
+
+def test_sample_keeps_bodacc_notices_whose_registered_siren_starts_with_prefix(spark):
+    one = spark.createDataFrame([("300000001",)], "siren STRING")
+    frames = {
+        "unite_legale": one,
+        "etablissement": one,
+        "doublons": one,
+        "rne": one,
+        "etablissement_liens_succession": spark.createDataFrame(
+            [("30000000100011",)], "siretEtablissementPredecesseur STRING"
+        ),
+        "bodacc": spark.createDataFrame(
+            [
+                ("a", "300000001,300 000 001"),
+                ("b", "552 100 554,123300456"),
+                ("c", "552100554,300 1"),
+            ],
+            "id STRING, registre STRING",
+        ),
+    }
+    kept = graph.sample(frames, "30")["bodacc"].orderBy("id").collect()
+    # "123300456" contains 30 but does not start with it.
+    assert [r.id for r in kept] == ["a", "c"]
+
+
+def test_indicateurs_do_not_count_the_1900_placeholder_as_a_creation(spark):
+    companies = spark.createDataFrame(
+        [
+            ("000000001", date(1900, 1, 1), "75", "56.10A"),
+            ("000000002", date(2026, 5, 3), "75", "56.10A"),
+        ],
+        "siren STRING, date_creation DATE, siege_departement STRING, activite_principale STRING",
+    )
+    notices = spark.createDataFrame(
+        [], "dateparution DATE, departement STRING, famille STRING, sirens ARRAY<STRING>"
+    )
+    rows = graph.indicateurs_territoire(companies, notices).collect()
+    assert [(r.mois, r.creations_sirene) for r in rows] == [(date(2026, 5, 1), 1)]
