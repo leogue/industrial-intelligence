@@ -7,9 +7,9 @@ BigQuery, Spark ou DuckDB les lisent ensuite directement.
 
 Aucun appel aux API INPI, data.gouv.fr ou DILA. Les originaux `raw/` et `bronze/` ne sont que lus.
 
-**État au 26/11/2026** : code et tests prêts, essai local de bout en bout sur des extraits réels.
-**Aucun batch Dataproc n'a encore été lancé avec ce code.** Les namespaces `silver_spark` et
-`gold` ne sont pas encore créés (plan prêt, non appliqué).
+**État au 26/11/2026** : namespaces `silver_spark` et `gold` créés, premier batch Dataproc
+**réussi en échantillon** (`--siren-prefix 30`, voir [premier batch](#premier-batch-dataproc--26112026)).
+Aucun calcul national ni Scheduler.
 
 ## Entrées
 
@@ -193,6 +193,46 @@ environ 40 Go lus sur ~61 Go de bronze. Ordre de grandeur : quelques dizaines de
 le national (de l'ordre de 5 à 10 €), un peu moins pour l'échantillon. `maxExecutors=10` borne
 la dépense. À mesurer au premier batch avant tout lancement national ou toute planification.
 
+### Premier batch Dataproc — 26/11/2026
+
+`etl-graphe-62e3f1d-1`, code `gs://industrial-intelligence-dev-data/code/etl/62e3f1d/graph.py`,
+runtime 4.0, `--siren-prefix 30`, `maxExecutors=10`. **Succès** : de 14:56 à 16:04 UTC, soit
+**68 min**.
+
+- La connexion au catalogue avec `warehouse = bl://…` fonctionne. Le runtime 4.0 fournit bien
+  les classes Iceberg, `GoogleAuthManager` et `GCSFileIO`.
+- Consommation : **6,15 DCU-heures** et **503 Go-heures** de stockage de shuffle, soit environ
+  0,5 € selon la grille publique. C'est une estimation : la facture réelle n'a pas été relevée.
+- Sorties : 189 Mo sous `iceberg/silver_spark/` et 33 Mo sous `iceberg/gold/`.
+
+| Table | Lignes |
+|---|---|
+| `silver_spark.entreprises` | 529 136 |
+| `silver_spark.etablissements` | 700 879 |
+| `silver_spark.dirigeants` | 468 396 |
+| `silver_spark.annonces_bodacc` | 4 233 695 |
+| `silver_spark.liens` | 477 289 |
+| `gold.fiche_entreprise` | 529 136 |
+| `gold.reseau_entreprises` | 229 442 |
+| `gold.indicateurs_territoire` | 180 627 |
+
+Liens : 171 794 `succession_etablissement`, 113 262 `cession_fonds`, 89 374
+`succession_entre_entreprises`, 51 920 `mandat_personne_physique`, 35 241
+`entrepreneur_individuel`, 14 510 `mandat_personne_morale` et 1 188 `doublon_siren`.
+
+Constats, à traiter avant le calcul national :
+
+- **Des milliers de petits fichiers.** Environ 6 900 jours BODACC, 4 100 fenêtres de diff RNE
+  et 5 470 parts de stock : environ 200 ouvertures de fichiers par minute.
+  `annonces_bodacc` a pris environ 19 min et `liens` environ 13 min. Le filtre d'échantillon
+  n'évite aucune lecture.
+- **BODACC relu deux fois** : `liens` recalcule les annonces au lieu de relire la table écrite.
+- **Filtre d'échantillon BODACC trop large** : `registre` *contient* le préfixe, au lieu de
+  SIREN qui *commencent* par lui. D'où 4,2 M d'annonces et 113 k cessions de fonds. Les
+  jointures restent exactes, puisqu'elles se font par SIREN.
+- **Parallélisme faible** : environ 5 DCU en moyenne, alors que 10 executors sont autorisés.
+  Cause non analysée.
+
 ## Infrastructure (`infra/opentofu/spark.tf`)
 
 Ce fichier redéclare, **avec les mêmes adresses**, les ressources créées le 29/10/2026 depuis la
@@ -206,7 +246,13 @@ Plan du 26/11/2026 (`-var-file=envs/dev.tfvars -var-file=envs/rne-dev.tfvars`) :
 concernent le job `silver-build` du prototype DuckDB, dont la configuration n'existe que dans un
 stash. Les ressources Spark ne sont plus proposées à la destruction. Ne pas appliquer ce plan
 global tel quel : soit restaurer `silver.tf`, soit décider explicitement de retirer
-`silver-build`. Pour créer seulement les namespaces :
+`silver-build`.
+
+**Appliqué le 26/11/2026** en plan ciblé : 2 créations, sauvegarde
+`terraform.tfstate.before-etl-namespaces-20261126T140224Z`. L'apply a créé les deux namespaces
+dans BigLake, puis s'est terminé en erreur avant de les inscrire dans l'état. Ils ont ensuite été
+ajoutés à l'état par `tofu import` (`google_biglake_iceberg_namespace.etl["gold"]` et
+`["silver_spark"]`), sans autre modification. Commande utilisée :
 
 ```sh
 cd infra/opentofu
