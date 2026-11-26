@@ -554,7 +554,11 @@ def indicateurs_territoire(companies: DataFrame, notices: DataFrame) -> DataFram
     secteur = companies.select(
         "siren", F.substring("activite_principale", 1, 2).alias("division_naf")
     )
-    creations = companies.where("date_creation IS NOT NULL").select(
+    # 1900-01-01 stands for an unknown date (10 % of companies in the 26/11 sample, against
+    # a handful for any other day): kept as supplied in silver, not counted as a creation.
+    creations = companies.where(
+        "date_creation IS NOT NULL AND date_creation <> DATE '1900-01-01'"
+    ).select(
         F.trunc("date_creation", "month").alias("mois"),
         F.col("siege_departement").alias("departement"),
         F.substring("activite_principale", 1, 2).alias("division_naf"),
@@ -716,7 +720,8 @@ def sample(frames: dict, prefix: str) -> dict:
     out["etablissement_liens_succession"] = frames["etablissement_liens_succession"].where(
         F.col("siretEtablissementPredecesseur").startswith(prefix)
     )
-    out["bodacc"] = frames["bodacc"].where(F.col("registre").contains(prefix))
+    # A registry token is a SIREN, written compact or spaced ("300010378,300 010 378").
+    out["bodacc"] = frames["bodacc"].where(F.col("registre").rlike(f"(^|,)\\s*{prefix}"))
     return out
 
 
@@ -742,14 +747,13 @@ def run(spark: SparkSession, args: argparse.Namespace) -> None:
     require_identifiers(frames["unite_legale"], "unite_legale", {"siren": 9})
     require_identifiers(frames["etablissement"], "etablissement", {"siren": 9, "siret": 14})
 
-    etabs = etablissements(frames["etablissement"])
+    etabs = etablissements(frames["etablissement"]).persist()
     if etabs.where(F.substring("siret", 1, 9) != F.col("siren")).limit(1).count():
         raise ValueError("etablissement: SIRET does not belong to its SIREN")
     rne = rne_current(frames["rne"]).persist()
     companies = entreprises(frames["unite_legale"], rne, etabs)
     dirs = dirigeants(rne)
     notices = annonces(frames["bodacc"])
-    edges = liens(dirs, frames["etablissement_liens_succession"], frames["doublons"], notices)
 
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     properties = {
@@ -763,10 +767,17 @@ def run(spark: SparkSession, args: argparse.Namespace) -> None:
         (f"{silver}.etablissements", etabs, ["siren", "siret"]),
         (f"{silver}.dirigeants", dirs, ["siren"]),
         (f"{silver}.annonces_bodacc", notices, ["dateparution", "id"]),
-        (f"{silver}.liens", edges, ["de_id", "vers_id"]),
     ]
     for table, df, keys in tables:
         write(df, table, keys, properties)
+    # Edges reuse the committed tables: the thousands of small BODACC files are read once.
+    edges = liens(
+        spark.table(f"{silver}.dirigeants"),
+        frames["etablissement_liens_succession"],
+        frames["doublons"],
+        spark.table(f"{silver}.annonces_bodacc"),
+    )
+    write(edges, f"{silver}.liens", ["de_id", "vers_id"], properties)
     # Gold reads the committed silver tables instead of recomputing the lineage.
     companies, dirs, notices, edges = (
         spark.table(f"{silver}.{name}")
