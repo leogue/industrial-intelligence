@@ -60,7 +60,8 @@ Projet `industrial-intelligence-dev`. Réellement déployé (vérifié le 29/10/
 - Cloud Run Jobs `rne-bootstrap`, `rne-materialize`, `rne-refresh` (`sync`), et Scheduler `rne-refresh-daily` toutes les 6 h ;
 - données RNE sous le préfixe `inpi/rne` (`raw/`, `bronze/`, `control/`) ;
 - Cloud Run Job `sirene-archive` et Scheduler `sirene-archive-daily` (06:00 UTC) : stocks SIRENE data.gouv.fr sous `bronze/insee/sirene/`.
-- Cloud Run Job `bodacc-archive` et Scheduler `bodacc-archive-daily` (08:00 UTC) : annonces BODACC de la DILA sous `raw/dila/bodacc/`, checkpoint sous `control/dila/bodacc/`. Rien d'autre (BigQuery, Workflows…) n'est créé.
+- Cloud Run Job `bodacc-archive` et Scheduler `bodacc-archive-daily` (08:00 UTC) : annonces BODACC de la DILA sous `raw/dila/bodacc/`, checkpoint sous `control/dila/bodacc/`.
+- ETL Spark (Dataproc Serverless, lancé à la main, sans Scheduler) : réseau `lakehouse`, compte `etl-spark`, catalogue Iceberg BigLake `industrial_intelligence` avec les namespaces `silver_spark` et `gold` (premier batch en échantillon le 26/11/2026, voir `docs/etl/spark-graphe.md`), plus le namespace `silver` de `lakehouse-load` et le job `silver-build` du prototype DuckDB. Rien d'autre (Workflows…) n'est créé.
 
 Règles :
 
